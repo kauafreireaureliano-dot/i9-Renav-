@@ -1,0 +1,501 @@
+// I9 AUTO — schema de dados
+// Convenções: UUID como chave primária, createdAt/updatedAt em todas as tabelas relevantes,
+// histórico preservado via AuditLog em vez de exclusão física (soft-delete onde fizer sentido).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =========================================================
+// AUTENTICAÇÃO E PERMISSÕES
+// =========================================================
+
+enum UserRole {
+  ADMIN
+  GERENTE
+  VENDEDOR
+  FINANCEIRO
+  DOCUMENTACAO
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions      Session[]
+  auditLogs     AuditLog[]
+  vehiclesCosts VehicleCost[]      @relation("CostCreatedBy")
+  documents     Document[]         @relation("DocumentUploadedBy")
+  renaveEvents  RenaveEvent[]      @relation("RenaveEventUser")
+  fiscalEvents  FiscalOperation[]  @relation("FiscalEventUser")
+  purchasesMade Purchase[]         @relation("PurchaseCreatedBy")
+  salesMade     Sale[]             @relation("SaleCreatedBy")
+  notifications Notification[]
+
+  @@map("users")
+}
+
+// Permissões guardadas em banco (não hardcoded) para permitir ajuste
+// fino por perfil sem precisar de deploy.
+model Permission {
+  id          String   @id @default(uuid())
+  code        String   @unique // ex: "vehicle.create", "renave.cancel"
+  description String
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  role         UserRole
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  permissionId String
+
+  @@unique([role, permissionId])
+  @@map("role_permissions")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  tokenHash String   @unique
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  @@map("sessions")
+}
+
+// =========================================================
+// PESSOAS: CLIENTES (compradores / vendedores / fornecedores)
+// =========================================================
+// Decisão técnica: uma única entidade Customer com papéis (roles) em vez de
+// três tabelas duplicadas (Buyer/Seller/Supplier) — evita duplicar CPF/CNPJ
+// e histórico quando a mesma pessoa compra e vende veículos, o que é comum
+// numa revenda. Purchase e Sale referenciam Customer diretamente.
+
+enum CustomerRole {
+  COMPRADOR
+  VENDEDOR
+  FORNECEDOR
+}
+
+model Customer {
+  id           String         @id @default(uuid())
+  name         String
+  document     String         @unique // CPF ou CNPJ
+  documentType String // CPF | CNPJ
+  phone        String?
+  whatsapp     String?
+  email        String?
+  address      String?
+  city         String?
+  state        String?
+  roles        CustomerRole[]
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  purchasesAsSeller Purchase[] @relation("PurchaseSeller")
+  salesAsBuyer      Sale[]     @relation("SaleBuyer")
+  documents         Document[] @relation("DocumentOwnerCustomer")
+
+  @@map("customers")
+}
+
+// =========================================================
+// VEÍCULOS
+// =========================================================
+
+enum VehicleStatus {
+  AGUARDANDO_ENTRADA
+  EM_ESTOQUE
+  RESERVADO
+  VENDIDO
+  AGUARDANDO_DOCUMENTACAO
+  DOCUMENTACAO_PENDENTE
+  SAIDA_SOLICITADA
+  FINALIZADO
+  CANCELADO
+}
+
+model Vehicle {
+  id            String   @id @default(uuid())
+  plate         String   @unique
+  renavam       String   @unique
+  chassis       String   @unique
+  brand         String
+  model         String
+  version       String?
+  yearManufacture Int
+  yearModel       Int
+  color         String
+  fuel          String
+  transmission  String
+  mileage       Int
+  category      String?
+  bodyType      String?
+
+  purchaseValue     Decimal @db.Decimal(12, 2)
+  announcedPrice    Decimal @db.Decimal(12, 2)
+  minimumSalePrice  Decimal @db.Decimal(12, 2)
+
+  purchaseDate  DateTime?
+  entryDate     DateTime?
+  origin        String?
+
+  status      VehicleStatus @default(AGUARDANDO_ENTRADA)
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  photos          VehiclePhoto[]
+  costs           VehicleCost[]
+  documents       Document[]
+  invoices        Invoice[]
+  renaveOperation RenaveOperation?
+  purchase        Purchase?
+  sale            Sale?
+  events          VehicleEvent[]
+
+  @@map("vehicles")
+}
+
+model VehiclePhoto {
+  id        String   @id @default(uuid())
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId String
+  url       String
+  isCover   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("vehicle_photos")
+}
+
+model VehicleCost {
+  id          String   @id @default(uuid())
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId   String
+  category    String // documentacao | transferencia | reparos | estetica | pecas | transporte | anuncios | outros
+  description String?
+  amount      Decimal  @db.Decimal(12, 2)
+  createdBy   User     @relation("CostCreatedBy", fields: [createdById], references: [id])
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@map("vehicle_costs")
+}
+
+// Timeline de eventos de um veículo (histórico visível na página do veículo)
+model VehicleEvent {
+  id        String   @id @default(uuid())
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId String
+  type      String // ex: STATUS_CHANGE, PRICE_CHANGE, DOCUMENT_ADDED, RENAVE_UPDATE, NOTE
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@map("vehicle_events")
+}
+
+// =========================================================
+// COMPRA (entrada de veículo)
+// =========================================================
+
+enum PurchaseStatus {
+  EM_ANDAMENTO
+  CONCLUIDA
+  CANCELADA
+}
+
+model Purchase {
+  id          String         @id @default(uuid())
+  vehicle     Vehicle        @relation(fields: [vehicleId], references: [id])
+  vehicleId   String         @unique
+  seller      Customer       @relation("PurchaseSeller", fields: [sellerId], references: [id])
+  sellerId    String
+  value       Decimal        @db.Decimal(12, 2)
+  purchaseDate DateTime
+  status      PurchaseStatus @default(EM_ANDAMENTO)
+  createdBy   User           @relation("PurchaseCreatedBy", fields: [createdById], references: [id])
+  createdById String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@map("purchases")
+}
+
+// =========================================================
+// VENDA (saída de veículo)
+// =========================================================
+
+enum SaleStatus {
+  EM_ANDAMENTO
+  CONCLUIDA
+  CANCELADA
+}
+
+model Sale {
+  id            String     @id @default(uuid())
+  vehicle       Vehicle    @relation(fields: [vehicleId], references: [id])
+  vehicleId     String     @unique
+  buyer         Customer   @relation("SaleBuyer", fields: [buyerId], references: [id])
+  buyerId       String
+  value         Decimal    @db.Decimal(12, 2)
+  saleDate      DateTime
+  paymentMethod String
+  status        SaleStatus @default(EM_ANDAMENTO)
+  createdBy     User       @relation("SaleCreatedBy", fields: [createdById], references: [id])
+  createdById   String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@map("sales")
+}
+
+// =========================================================
+// DOCUMENTOS
+// =========================================================
+
+enum DocumentType {
+  CRLV
+  ATPV
+  NF_ENTRADA
+  NF_SAIDA
+  DOCUMENTO_VENDEDOR
+  DOCUMENTO_COMPRADOR
+  CONTRATO
+  COMPROVANTE
+  OUTRO
+}
+
+enum DocumentStatus {
+  PENDENTE
+  ENVIADO
+  APROVADO
+  REJEITADO
+}
+
+model Document {
+  id         String         @id @default(uuid())
+  vehicle    Vehicle?       @relation(fields: [vehicleId], references: [id])
+  vehicleId  String?
+  ownerCustomer   Customer?  @relation("DocumentOwnerCustomer", fields: [ownerCustomerId], references: [id])
+  ownerCustomerId String?
+  type       DocumentType
+  fileUrl    String
+  status     DocumentStatus @default(PENDENTE)
+  notes      String?
+  uploadedBy User           @relation("DocumentUploadedBy", fields: [uploadedById], references: [id])
+  uploadedById String
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@map("documents")
+}
+
+// =========================================================
+// NOTAS FISCAIS
+// =========================================================
+
+enum InvoiceType {
+  ENTRADA
+  SAIDA
+}
+
+enum InvoiceStatus {
+  PENDENTE
+  AUTORIZADA
+  REJEITADA
+  CANCELADA
+}
+
+model Invoice {
+  id         String        @id @default(uuid())
+  vehicle    Vehicle       @relation(fields: [vehicleId], references: [id])
+  vehicleId  String
+  type       InvoiceType
+  number     String?
+  series     String?
+  accessKey  String?       @unique
+  issueDate  DateTime?
+  value      Decimal       @db.Decimal(12, 2)
+  issuer     String
+  recipient  String
+  status     InvoiceStatus @default(PENDENTE)
+  xmlUrl     String?
+  protocol   String?
+  returnMessage String?
+  environment String       @default("MOCK") // MOCK | PRODUCAO
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  fiscalOperations FiscalOperation[]
+
+  @@map("invoices")
+}
+
+// =========================================================
+// RENAVE
+// =========================================================
+
+enum RenaveOperationStatus {
+  NAO_INICIADO
+  APTIDAO_CONSULTADA
+  APTO
+  NAO_APTO
+  ENTRADA_SOLICITADA
+  ENTRADA_CONCLUIDA
+  ATPV_ENVIADO
+  ATPV_ASSINADO
+  SAIDA_SOLICITADA
+  SAIDA_CONCLUIDA
+  ERRO
+  CANCELADO
+}
+
+// Estado atual/consolidado da negociação RENAVE de um veículo (1:1 com Vehicle)
+model RenaveOperation {
+  id             String                 @id @default(uuid())
+  vehicle        Vehicle                @relation(fields: [vehicleId], references: [id])
+  vehicleId      String                 @unique
+  status         RenaveOperationStatus  @default(NAO_INICIADO)
+  aptitudeResult String? // motivo/detalhe da última consulta de aptidão
+  environment    String                 @default("MOCK") // MOCK | PRODUCAO
+  lastCommunicationAt DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  events RenaveEvent[]
+
+  @@map("renave_operations")
+}
+
+// Log imutável de cada chamada feita ao provedor RENAVE (mock ou real)
+model RenaveEvent {
+  id                String          @id @default(uuid())
+  renaveOperation   RenaveOperation @relation(fields: [renaveOperationId], references: [id])
+  renaveOperationId String
+  operation         String // consultarAptidao | solicitarEntradaEstoque | enviarAtpvAssinatura | ...
+  requestId         String?
+  status            String // SUCESSO | ERRO
+  requestSanitized  Json?
+  responseSanitized Json?
+  errorCode         String?
+  errorMessage      String?
+  environment       String          @default("MOCK")
+  user              User            @relation("RenaveEventUser", fields: [userId], references: [id])
+  userId            String
+  createdAt         DateTime        @default(now())
+
+  @@map("renave_events")
+}
+
+// =========================================================
+// FISCAL
+// =========================================================
+
+// Log imutável de cada chamada feita ao provedor fiscal (mock ou SEFAZ real)
+model FiscalOperation {
+  id                String   @id @default(uuid())
+  invoice           Invoice? @relation(fields: [invoiceId], references: [id])
+  invoiceId         String?
+  operation         String // emitirNotaEntrada | emitirNotaSaida | consultarNota | cancelarNota | baixarXML | consultarStatus
+  status            String // SUCESSO | ERRO
+  requestSanitized  Json?
+  responseSanitized Json?
+  errorCode         String?
+  errorMessage      String?
+  environment       String   @default("MOCK")
+  user              User     @relation("FiscalEventUser", fields: [userId], references: [id])
+  userId            String
+  createdAt         DateTime @default(now())
+
+  @@map("fiscal_operations")
+}
+
+// =========================================================
+// AUDITORIA
+// =========================================================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  user       User?    @relation(fields: [userId], references: [id])
+  userId     String?
+  action     String // VEHICLE_UPDATE | SALE_CREATE | LOGIN | LOGIN_FAILED | ...
+  entityType String? // Vehicle | Sale | Purchase | Document | ...
+  entityId   String?
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+// =========================================================
+// NOTIFICAÇÕES
+// =========================================================
+
+enum NotificationSeverity {
+  INFO
+  ATENCAO
+  URGENTE
+}
+
+model Notification {
+  id        String               @id @default(uuid())
+  user      User?                @relation(fields: [userId], references: [id])
+  userId    String? // null = notificação global (todos os usuários)
+  title     String
+  message   String
+  severity  NotificationSeverity @default(INFO)
+  read      Boolean              @default(false)
+  entityType String?
+  entityId   String?
+  createdAt DateTime             @default(now())
+
+  @@map("notifications")
+}
+
+// =========================================================
+// EMPRESA / CONFIGURAÇÕES
+// =========================================================
+
+model CompanySettings {
+  id              String  @id @default(uuid())
+  legalName       String
+  tradeName       String
+  cnpj            String
+  stateRegistration String?
+  address         String?
+  city            String?
+  state           String?
+  phone           String?
+  email           String?
+  renaveEmail     String?
+  renaveEnvironment  String @default("MOCK") // MOCK | PRODUCAO
+  fiscalEnvironment  String @default("MOCK") // MOCK | PRODUCAO
+  updatedAt       DateTime @updatedAt
+
+  @@map("company_settings")
+}
