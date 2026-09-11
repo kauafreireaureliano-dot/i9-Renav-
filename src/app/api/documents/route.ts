@@ -76,6 +76,8 @@ export async function POST(req: NextRequest) {
     const document = await createDocument({
       ...parsed.data,
       fileUrl,
+      fileName: file.name,
+      mimeType: file.type || undefined,
       uploadedById: user.id,
     });
 

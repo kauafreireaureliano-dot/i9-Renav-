@@ -11,9 +11,17 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/format";
 import { DocumentUploadDialog } from "./document-upload-dialog";
+import { DeleteDocumentButton } from "./delete-document-button";
+import { getCurrentUser } from "@/lib/auth";
+import { hasPermission } from "@/lib/permissions";
 
 export default async function DocumentosPage() {
-  const [documents, vehicles] = await Promise.all([listAllDocuments(), listVehicles()]);
+  const [documents, vehicles, user] = await Promise.all([
+    listAllDocuments(),
+    listVehicles(),
+    getCurrentUser(),
+  ]);
+  const canDelete = user ? hasPermission(user.role, "documents.delete") : false;
 
   return (
     <div className="space-y-6">
@@ -37,6 +45,7 @@ export default async function DocumentosPage() {
               <TableHead>Data</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Arquivo</TableHead>
+              {canDelete && <TableHead className="text-right">Ações</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -62,11 +71,16 @@ export default async function DocumentosPage() {
                     Abrir
                   </a>
                 </TableCell>
+                {canDelete && (
+                  <TableCell className="text-right">
+                    <DeleteDocumentButton documentId={d.id} />
+                  </TableCell>
+                )}
               </TableRow>
             ))}
             {documents.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={canDelete ? 7 : 6} className="text-center text-muted-foreground py-8">
                   Nenhum documento enviado.
                 </TableCell>
               </TableRow>

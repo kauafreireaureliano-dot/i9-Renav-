@@ -304,6 +304,8 @@ model Document {
   ownerCustomerId String?
   type       DocumentType
   fileUrl    String
+  fileName   String?
+  mimeType   String?
   status     DocumentStatus @default(PENDENTE)
   notes      String?
   uploadedBy User           @relation("DocumentUploadedBy", fields: [uploadedById], references: [id])

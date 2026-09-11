@@ -17,10 +17,12 @@ export async function GET(
     }
 
     const buffer = await readStoredFile(document.fileUrl);
+    const fileName = document.fileName ?? document.fileUrl.split("/").pop() ?? "arquivo";
+
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
-        "Content-Type": "application/octet-stream",
-        "Content-Disposition": `inline; filename="${document.fileUrl.split("/").pop()}"`,
+        "Content-Type": document.mimeType ?? "application/octet-stream",
+        "Content-Disposition": `inline; filename="${fileName}"`,
       },
     });
   } catch (err) {

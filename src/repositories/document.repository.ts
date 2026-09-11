@@ -26,8 +26,14 @@ export function createDocument(data: {
   ownerCustomerId?: string;
   type: DocumentType;
   fileUrl: string;
+  fileName?: string;
+  mimeType?: string;
   notes?: string;
   uploadedById: string;
 }) {
   return prisma.document.create({ data });
+}
+
+export function deleteDocument(id: string) {
+  return prisma.document.delete({ where: { id } });
 }
