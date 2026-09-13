@@ -6,6 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import { VEHICLE_STATUS_LABELS, VEHICLE_STATUS_TONE } from "@/lib/vehicle-status";
 import { RenaveActions } from "./renave-actions";
+import { FlowTimeline } from "./flow-timeline";
+import { getActiveFlow, getPurchaseFlowSteps, getSaleFlowSteps } from "@/lib/vehicle-flow";
 
 export default async function VeiculoPage({ params }: PageProps<"/estoque/veiculo/[id]">) {
   const { id } = await params;
@@ -16,6 +18,26 @@ export default async function VeiculoPage({ params }: PageProps<"/estoque/veicul
   const costsTotal = vehicle.costs.reduce((acc, c) => acc + Number(c.amount), 0);
   const totalCost = Number(vehicle.purchaseValue) + costsTotal;
   const margin = Number(vehicle.announcedPrice) - totalCost;
+
+  const activeFlow = getActiveFlow({
+    status: vehicle.status,
+    hasPurchase: !!vehicle.purchase,
+    hasSale: !!vehicle.sale,
+  });
+
+  const flowEvents = (vehicle.renaveOperation?.events ?? []).map((e) => ({
+    operation: e.operation,
+    status: e.status as "SUCESSO" | "ERRO",
+    responseSanitized: e.responseSanitized,
+  }));
+  const flowInvoices = vehicle.invoices.map((i) => ({ type: i.type, status: i.status }));
+
+  const flowSteps =
+    activeFlow === "compra"
+      ? getPurchaseFlowSteps({ events: flowEvents, invoices: flowInvoices, vehicleStatus: vehicle.status })
+      : activeFlow === "venda"
+        ? getSaleFlowSteps({ events: flowEvents, invoices: flowInvoices, vehicleStatus: vehicle.status })
+        : null;
 
   return (
     <div className="space-y-6">
@@ -118,11 +140,23 @@ export default async function VeiculoPage({ params }: PageProps<"/estoque/veicul
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <RenaveActions
-                vehicleId={vehicle.id}
-                status={vehicle.renaveOperation?.status ?? "NAO_INICIADO"}
-                aptitudeResult={vehicle.renaveOperation?.aptitudeResult}
-              />
+              {flowSteps ? (
+                <FlowTimeline
+                  vehicleId={vehicle.id}
+                  flowType={activeFlow as "compra" | "venda"}
+                  steps={flowSteps}
+                  counterpartName={
+                    activeFlow === "compra" ? vehicle.purchase?.seller.name : vehicle.sale?.buyer.name
+                  }
+                  saleValue={activeFlow === "venda" && vehicle.sale ? Number(vehicle.sale.value) : undefined}
+                />
+              ) : (
+                <RenaveActions
+                  vehicleId={vehicle.id}
+                  status={vehicle.renaveOperation?.status ?? "NAO_INICIADO"}
+                  aptitudeResult={vehicle.renaveOperation?.aptitudeResult}
+                />
+              )}
 
               <div className="border-t pt-4">
                 <h3 className="text-sm font-medium mb-2">Últimas comunicações</h3>
