@@ -33,14 +33,35 @@ export interface ConsultaNotaResult {
   returnMessage?: string;
 }
 
+// Dados completos necessários para montar uma NF-e de verdade. issuer/recipient/value
+// são os campos "de vitrine" (mostrados na tela); os demais só são exigidos pelo
+// provider real (o MockFiscalService ignora tudo que não seja issuer/recipient/value).
+export interface FiscalInvoicePayload {
+  issuer: string;
+  recipient: string;
+  value: number;
+  naturezaOperacao: string;
+  recipientDocument: string; // CPF ou CNPJ, apenas dígitos
+  recipientDocumentType: "CPF" | "CNPJ";
+  recipientAddress?: {
+    logradouro?: string;
+    cidade?: string;
+    uf?: string;
+    cep?: string;
+  };
+  itemDescription: string;
+  ncm: string;
+  cfop: string;
+}
+
 export interface FiscalProvider {
   emitirNotaEntrada(
     ctx: FiscalOperationContext,
-    payload: Record<string, unknown>
+    payload: FiscalInvoicePayload
   ): Promise<FiscalCallResult<EmissaoResult>>;
   emitirNotaSaida(
     ctx: FiscalOperationContext,
-    payload: Record<string, unknown>
+    payload: FiscalInvoicePayload
   ): Promise<FiscalCallResult<EmissaoResult>>;
   consultarNota(ctx: FiscalOperationContext): Promise<FiscalCallResult<ConsultaNotaResult>>;
   cancelarNota(

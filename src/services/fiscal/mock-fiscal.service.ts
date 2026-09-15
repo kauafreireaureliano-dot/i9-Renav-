@@ -5,6 +5,7 @@ import type {
   FiscalCallResult,
   EmissaoResult,
   ConsultaNotaResult,
+  FiscalInvoicePayload,
 } from "@/domain/fiscal";
 
 // Implementação MOCK/SANDBOX do FiscalProvider. Simula emissão/autorização de
@@ -25,7 +26,7 @@ function ok<T>(data: T, request: unknown): FiscalCallResult<T> {
 export const mockFiscalService: FiscalProvider = {
   async emitirNotaEntrada(
     ctx: FiscalOperationContext,
-    payload: Record<string, unknown>
+    payload: FiscalInvoicePayload
   ): Promise<FiscalCallResult<EmissaoResult>> {
     await delay(600);
     return ok<EmissaoResult>(
@@ -43,7 +44,7 @@ export const mockFiscalService: FiscalProvider = {
 
   async emitirNotaSaida(
     ctx: FiscalOperationContext,
-    payload: Record<string, unknown>
+    payload: FiscalInvoicePayload
   ): Promise<FiscalCallResult<EmissaoResult>> {
     await delay(600);
     return ok<EmissaoResult>(
