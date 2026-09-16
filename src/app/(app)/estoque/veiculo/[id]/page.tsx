@@ -199,9 +199,20 @@ export default async function VeiculoPage({ params }: PageProps<"/estoque/veicul
                     <span className="font-medium">{inv.type === "ENTRADA" ? "NF Entrada" : "NF Saída"}</span>{" "}
                     {inv.number && <span className="text-muted-foreground">#{inv.number}</span>}
                   </div>
-                  <Badge variant={inv.status === "AUTORIZADA" ? "secondary" : "outline"}>
-                    {inv.status}
-                  </Badge>
+                  <div className="flex items-center gap-3">
+                    {inv.status === "AUTORIZADA" && inv.pdfUrl && (
+                      <a
+                        href={`/api/invoices/${inv.id}/file?format=pdf`}
+                        target="_blank"
+                        className="text-primary hover:underline"
+                      >
+                        Ver PDF
+                      </a>
+                    )}
+                    <Badge variant={inv.status === "AUTORIZADA" ? "secondary" : "outline"}>
+                      {inv.status}
+                    </Badge>
+                  </div>
                 </div>
               ))}
             </CardContent>

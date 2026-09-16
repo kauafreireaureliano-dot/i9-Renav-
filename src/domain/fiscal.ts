@@ -26,6 +26,7 @@ export interface EmissaoResult {
   protocol: string;
   status: "AUTORIZADA" | "REJEITADA";
   xmlUrl?: string;
+  pdfUrl?: string; // DANFE — o que um humano (contador, cliente) deve visualizar
 }
 
 export interface ConsultaNotaResult {

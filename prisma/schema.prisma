@@ -348,6 +348,7 @@ model Invoice {
   recipient  String
   status     InvoiceStatus @default(PENDENTE)
   xmlUrl     String?
+  pdfUrl     String? // DANFE — documento visual (o que o contador/cliente reconhece)
   protocol   String?
   returnMessage String?
   environment String       @default("MOCK") // MOCK | PRODUCAO

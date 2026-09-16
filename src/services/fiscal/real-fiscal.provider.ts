@@ -157,7 +157,8 @@ async function emitir(
           accessKey: data.chaveAcesso ?? "",
           protocol: invoiceId, // usado depois para consultarNota/cancelarNota
           status: "AUTORIZADA",
-          xmlUrl: data.xmlUrl ?? data.pdfUrl,
+          xmlUrl: data.xmlUrl,
+          pdfUrl: data.pdfUrl,
         },
         raw: { request: body, response: data },
       };

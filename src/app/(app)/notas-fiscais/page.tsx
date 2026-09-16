@@ -57,6 +57,7 @@ function InvoiceTable({
               <TableHead>Data</TableHead>
               <TableHead>Ambiente</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Documento</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -78,11 +79,33 @@ function InvoiceTable({
                     {inv.status}
                   </Badge>
                 </TableCell>
+                <TableCell>
+                  {inv.status === "AUTORIZADA" && inv.pdfUrl ? (
+                    <div className="flex gap-3">
+                      <a
+                        href={`/api/invoices/${inv.id}/file?format=pdf`}
+                        target="_blank"
+                        className="text-primary hover:underline text-sm"
+                      >
+                        Ver PDF
+                      </a>
+                      <a
+                        href={`/api/invoices/${inv.id}/file?format=xml`}
+                        target="_blank"
+                        className="text-primary hover:underline text-sm"
+                      >
+                        XML
+                      </a>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
             {invoices.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   Nenhuma nota registrada.
                 </TableCell>
               </TableRow>

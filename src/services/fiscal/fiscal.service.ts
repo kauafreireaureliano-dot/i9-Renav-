@@ -187,6 +187,7 @@ async function emitir(
           protocol: result.data!.protocol,
           status: result.data!.status,
           xmlUrl: result.data!.xmlUrl,
+          pdfUrl: result.data!.pdfUrl,
           issueDate: new Date(),
         }
       : { status: "REJEITADA", returnMessage: result.errorMessage },
