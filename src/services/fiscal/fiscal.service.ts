@@ -5,13 +5,20 @@ import { realFiscalProvider } from "./real-fiscal.provider";
 import type { FiscalProvider, FiscalCallResult, FiscalInvoicePayload } from "@/domain/fiscal";
 import type { InvoiceType } from "@prisma/client";
 
-// Valores-padrão de CFOP/NCM para venda/compra de veículo usado. São um
-// PALPITE RAZOÁVEL, não uma definição fiscal — a contadora precisa confirmar
-// (revenda de usados costuma ter tratamento de ICMS diferenciado por estado,
-// ex: Convênio ICMS 51/2000). Ajustáveis via .env sem precisar redeploy de código.
+// CFOP confirmados para Pernambuco junto à SEFAZ-PE (Decreto 44.650/2017,
+// art. 13, Anexo 3, art. 17 — tabela de Base de Cálculo Reduzida):
+//   - Entrada (compra de veículo usado de pessoa física): CFOP 1.102
+//   - Saída (venda do veículo usado): CFOP 5.102, com redução de 20% na base
+//     de cálculo do ICMS (CST 20), válida quando a entrada não foi onerada
+//     pelo imposto — é o caso normal ao comprar de pessoa física.
+// NCM ainda é um palpite razoável (código genérico de automóvel de passageiros)
+// — confirmar com a contadora antes de emitir a primeira nota real.
+// Tudo ajustável via .env sem precisar mexer em código.
 const DEFAULT_NCM_VEICULO = "87032310";
 const DEFAULT_CFOP_ENTRADA = "1102";
 const DEFAULT_CFOP_SAIDA = "5102";
+const DEFAULT_ICMS_CST_SAIDA = "20";
+const DEFAULT_ICMS_REDUCAO_BASE_SAIDA = 20;
 
 function onlyDigits(value: string): string {
   return value.replace(/\D/g, "");
@@ -80,6 +87,19 @@ async function buildInvoicePayload(
       type === "ENTRADA"
         ? (process.env.FISCAL_CFOP_ENTRADA ?? DEFAULT_CFOP_ENTRADA)
         : (process.env.FISCAL_CFOP_SAIDA ?? DEFAULT_CFOP_SAIDA),
+    // Redução de base só se aplica na saída (venda), e só quando a entrada
+    // não foi tributada — presumimos que sim, já que o veículo veio de
+    // pessoa física. Se um dia comprarem de outra revenda (entrada com ICMS
+    // destacado), essa premissa deixa de valer e o cálculo aqui precisa mudar.
+    icms:
+      type === "SAIDA"
+        ? {
+            cst: process.env.FISCAL_ICMS_CST_SAIDA ?? DEFAULT_ICMS_CST_SAIDA,
+            baseCalculoReduzidaPercentual: process.env.FISCAL_ICMS_REDUCAO_BASE_SAIDA
+              ? Number(process.env.FISCAL_ICMS_REDUCAO_BASE_SAIDA)
+              : DEFAULT_ICMS_REDUCAO_BASE_SAIDA,
+          }
+        : undefined,
   };
 
   if (getEnvironment() === "PRODUCAO" && !payload.recipientDocument) {

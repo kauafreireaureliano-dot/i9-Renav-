@@ -77,6 +77,14 @@ function buildEmissaoPayload(payload: FiscalInvoicePayload) {
         quantidade: 1,
         valorUnitario: payload.value,
         valorTotal: payload.value,
+        // ATENÇÃO: nomes de campo abaixo não confirmados na doc pública da
+        // Notaas (não veio detalhamento de ICMS no que consultei). Testar no
+        // sandbox deles e ajustar os nomes conforme o retorno de erro antes
+        // de confiar nisso em produção — é só aqui que precisa mudar.
+        ...(payload.icms && {
+          icmsCst: payload.icms.cst,
+          icmsReducaoBaseCalculoPercentual: payload.icms.baseCalculoReduzidaPercentual,
+        }),
       },
     ],
     pagamentos: [{ tipoPagamento: "01", valor: payload.value }],

@@ -52,6 +52,13 @@ export interface FiscalInvoicePayload {
   itemDescription: string;
   ncm: string;
   cfop: string;
+  // Redução de base de cálculo do ICMS (ex: revenda de veículo usado adquirido
+  // de pessoa física — em PE, 20% da base, CST 20, conforme Decreto 44.650/2017,
+  // art. 13, Anexo 3, art. 17). undefined = sem redução (base cheia).
+  icms?: {
+    cst: string;
+    baseCalculoReduzidaPercentual?: number;
+  };
 }
 
 export interface FiscalProvider {
