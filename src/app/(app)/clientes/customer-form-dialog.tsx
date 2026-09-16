@@ -53,6 +53,9 @@ export function CustomerFormDialog() {
       phone: formData.get("phone") || undefined,
       whatsapp: formData.get("whatsapp") || undefined,
       email: formData.get("email") || undefined,
+      address: formData.get("address") || undefined,
+      addressNumber: formData.get("addressNumber") || undefined,
+      neighborhood: formData.get("neighborhood") || undefined,
       city: formData.get("city") || undefined,
       state: formData.get("state") || undefined,
       roles,
@@ -125,7 +128,21 @@ export function CustomerFormDialog() {
             <Label htmlFor="email">E-mail</Label>
             <Input id="email" name="email" type="email" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="address">Endereço (rua/av.)</Label>
+              <Input id="address" name="address" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="addressNumber">Número</Label>
+              <Input id="addressNumber" name="addressNumber" />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="neighborhood">Bairro</Label>
+              <Input id="neighborhood" name="neighborhood" />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="city">Cidade</Label>
               <Input id="city" name="city" />
@@ -135,6 +152,9 @@ export function CustomerFormDialog() {
               <Input id="state" name="state" maxLength={2} />
             </div>
           </div>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Endereço completo (com bairro) é obrigatório para emitir NF-e real para este cliente.
+          </p>
           <div className="space-y-2">
             <Label>Papéis</Label>
             <div className="flex gap-3">

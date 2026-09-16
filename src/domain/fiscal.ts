@@ -40,14 +40,20 @@ export interface FiscalInvoicePayload {
   issuer: string;
   recipient: string;
   value: number;
+  // 0 = nota de entrada, 1 = nota de saída — validado ao vivo contra o
+  // sandbox da Notaas em 2026-09-16 (campo "tipoOperacao", numérico).
+  tipoOperacao: 0 | 1;
   naturezaOperacao: string;
   recipientDocument: string; // CPF ou CNPJ, apenas dígitos
   recipientDocumentType: "CPF" | "CNPJ";
   recipientAddress?: {
     logradouro?: string;
+    numero?: string;
+    bairro?: string;
     cidade?: string;
     uf?: string;
     cep?: string;
+    codigoMunicipio?: string; // código IBGE de 7 dígitos, obrigatório pela SEFAZ
   };
   itemDescription: string;
   ncm: string;

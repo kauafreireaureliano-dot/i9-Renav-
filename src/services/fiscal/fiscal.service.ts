@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sanitizeForLog } from "@/lib/sanitize";
+import { getMunicipioCode } from "@/lib/ibge";
 import { mockFiscalService } from "./mock-fiscal.service";
 import { realFiscalProvider } from "./real-fiscal.provider";
 import type { FiscalProvider, FiscalCallResult, FiscalInvoicePayload } from "@/domain/fiscal";
@@ -19,6 +20,10 @@ const DEFAULT_CFOP_ENTRADA = "1102";
 const DEFAULT_CFOP_SAIDA = "5102";
 const DEFAULT_ICMS_CST_SAIDA = "20";
 const DEFAULT_ICMS_REDUCAO_BASE_SAIDA = 20;
+// CST 00 validado ao vivo no sandbox da Notaas para a nota de entrada
+// (compra de pessoa física) em 2026-09-16 — não foi rejeitado pela SEFAZ,
+// mas o enquadramento tributário "ideal" ainda vale confirmar com a contadora.
+const DEFAULT_ICMS_CST_ENTRADA = "00";
 
 function onlyDigits(value: string): string {
   return value.replace(/\D/g, "");
@@ -69,16 +74,25 @@ async function buildInvoicePayload(
   const counterpart = type === "ENTRADA" ? vehicle.purchase?.seller : vehicle.sale?.buyer;
   const itemDescription = `${vehicle.brand} ${vehicle.model} ${vehicle.version ?? ""} - placa ${vehicle.plate} - chassi ${vehicle.chassis}`.trim();
 
+  const codigoMunicipio =
+    counterpart?.city && counterpart?.state
+      ? await getMunicipioCode(counterpart.city, counterpart.state)
+      : undefined;
+
   const payload: FiscalInvoicePayload = {
     ...basic,
+    tipoOperacao: type === "ENTRADA" ? 0 : 1,
     naturezaOperacao: type === "ENTRADA" ? "Compra de veículo usado" : "Venda de veículo usado",
     recipientDocument: counterpart ? onlyDigits(counterpart.document) : "",
     recipientDocumentType: counterpart?.documentType === "CNPJ" ? "CNPJ" : "CPF",
     recipientAddress: counterpart
       ? {
           logradouro: counterpart.address ?? undefined,
+          numero: counterpart.addressNumber ?? "S/N",
+          bairro: counterpart.neighborhood ?? undefined,
           cidade: counterpart.city ?? undefined,
           uf: counterpart.state ?? undefined,
+          codigoMunicipio,
         }
       : undefined,
     itemDescription,
@@ -99,15 +113,21 @@ async function buildInvoicePayload(
               ? Number(process.env.FISCAL_ICMS_REDUCAO_BASE_SAIDA)
               : DEFAULT_ICMS_REDUCAO_BASE_SAIDA,
           }
-        : undefined,
+        : { cst: DEFAULT_ICMS_CST_ENTRADA },
   };
 
-  if (getEnvironment() === "PRODUCAO" && !payload.recipientDocument) {
-    return {
-      payload,
-      validationError:
-        "Não foi possível montar a NF-e: o comprador/vendedor deste veículo não tem CPF/CNPJ cadastrado.",
-    };
+  if (getEnvironment() === "PRODUCAO") {
+    const missing: string[] = [];
+    if (!payload.recipientDocument) missing.push("CPF/CNPJ");
+    if (!payload.recipientAddress?.bairro) missing.push("bairro");
+    if (!payload.recipientAddress?.codigoMunicipio) missing.push("código do município (IBGE)");
+
+    if (missing.length > 0) {
+      return {
+        payload,
+        validationError: `Não foi possível montar a NF-e: cadastro do ${type === "ENTRADA" ? "vendedor" : "comprador"} incompleto (faltando: ${missing.join(", ")}). Complete o cadastro em Clientes.`,
+      };
+    }
   }
 
   return { payload };

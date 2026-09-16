@@ -9,6 +9,7 @@ function payload(overrides: Partial<FiscalInvoicePayload> = {}): FiscalInvoicePa
     issuer: "Vendedor",
     recipient: "I9 Car",
     value: 78000,
+    tipoOperacao: 0,
     naturezaOperacao: "Compra de veículo usado",
     recipientDocument: "12345678900",
     recipientDocumentType: "CPF",

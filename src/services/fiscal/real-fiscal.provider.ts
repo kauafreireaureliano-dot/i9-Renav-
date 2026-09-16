@@ -11,15 +11,19 @@ import type {
 // provedor de NF-e — escolhida por ter um plano gratuito de verdade (50
 // notas/mês, sem cartão) em vez de exigir contrato pago desde o início.
 //
-// IMPORTANTE — montado a partir da documentação pública deles
-// (docs.notaas.com.br) sem uma conta real pra validar campo a campo.
-// Antes de emitir a primeira nota de verdade:
-//   1. Criar conta gratuita em notaas.com.br
-//   2. Subir o certificado digital e-CNPJ da empresa no painel deles
-//   3. Pegar a chave de API do ambiente de SANDBOX e testar por aqui primeiro
-//      (FISCAL_ENVIRONMENT continua em MOCK até isso ser validado)
-//   4. Só então trocar NOTAAS_API_KEY pela chave de PRODUÇÃO e
-//      FISCAL_ENVIRONMENT=PRODUCAO
+// VALIDADO AO VIVO em 2026-09-16 contra o ambiente de homologação da Notaas,
+// com o CNPJ real da I9 Car, passando pelo próprio FiscalService da
+// aplicação (não só chamadas manuais): uma nota de ENTRADA (compra de
+// veículo usado) e uma de SAÍDA (venda, com redução de 20% na base de
+// cálculo do ICMS / CST 20) foram emitidas e autorizadas — ambas com
+// cStat=100 "Autorizado o uso da NF-e" da SEFAZ-PE. Endereço completo
+// (bairro + código IBGE do município) é obrigatório; sem isso a SEFAZ
+// rejeita antes de validar o resto.
+//
+// Antes de trocar para produção de verdade:
+//   1. Trocar NOTAAS_API_KEY pela chave de PRODUÇÃO (painel Notaas)
+//   2. FISCAL_ENVIRONMENT=PRODUCAO
+//   3. Confirmar CFOP/NCM/CST com a contadora (ver comentário em fiscal.service.ts)
 //
 // Se algum campo abaixo vier rejeitado pela Notaas, o erro retornado por eles
 // aparece direto em errorMessage — é questão de ajustar o payload aqui,
@@ -50,9 +54,15 @@ async function notaasFetch(path: string, init: RequestInit = {}) {
   return { ok: res.ok, status: res.status, body };
 }
 
+// Campos confirmados ao vivo contra o sandbox da Notaas (homologação, CNPJ
+// real da I9 Car) em 2026-09-16 — payload abaixo chegou a receber
+// cStat=100 "Autorizado o uso da NF-e" da SEFAZ-PE. `tipoOperacao` (0/1),
+// `endereco.codigoMunicipio` (IBGE, 7 dígitos) e `endereco.bairro` são
+// obrigatórios; sem eles a SEFAZ rejeita antes mesmo de validar o resto.
 function buildEmissaoPayload(payload: FiscalInvoicePayload) {
   return {
     modelo: 55,
+    tipoOperacao: payload.tipoOperacao,
     naturezaOperacao: payload.naturezaOperacao,
     dest: {
       // Notaas espera CPF ou CNPJ conforme o tamanho do documento.
@@ -63,7 +73,10 @@ function buildEmissaoPayload(payload: FiscalInvoicePayload) {
       endereco: payload.recipientAddress
         ? {
             logradouro: payload.recipientAddress.logradouro,
+            numero: payload.recipientAddress.numero,
+            bairro: payload.recipientAddress.bairro,
             cidade: payload.recipientAddress.cidade,
+            codigoMunicipio: payload.recipientAddress.codigoMunicipio,
             uf: payload.recipientAddress.uf,
             cep: payload.recipientAddress.cep,
           }
@@ -77,13 +90,11 @@ function buildEmissaoPayload(payload: FiscalInvoicePayload) {
         quantidade: 1,
         valorUnitario: payload.value,
         valorTotal: payload.value,
-        // ATENÇÃO: nomes de campo abaixo não confirmados na doc pública da
-        // Notaas (não veio detalhamento de ICMS no que consultei). Testar no
-        // sandbox deles e ajustar os nomes conforme o retorno de erro antes
-        // de confiar nisso em produção — é só aqui que precisa mudar.
-        ...(payload.icms && {
-          icmsCst: payload.icms.cst,
-          icmsReducaoBaseCalculoPercentual: payload.icms.baseCalculoReduzidaPercentual,
+        ...(payload.icms && { cst: payload.icms.cst }),
+        // Confirmado ao vivo em 2026-09-16: a Notaas rejeita CST 20 sem esse
+        // campo, com a mensagem apontando exatamente esse nome (SEFAZ N14-10).
+        ...(payload.icms?.baseCalculoReduzidaPercentual !== undefined && {
+          percentualReducaoBc: payload.icms.baseCalculoReduzidaPercentual,
         }),
       },
     ],
@@ -98,11 +109,13 @@ async function emitir(
   const res = await notaasFetch("/nfe/emitir", { method: "POST", body: JSON.stringify(body) });
 
   if (!res.ok) {
+    const errBody = res.body as { error?: string; detail?: string; campos?: string[] };
     return {
       success: false,
       errorCode: `HTTP_${res.status}`,
       errorMessage:
-        (res.body as { message?: string })?.message ?? "Falha ao emitir NF-e junto à Notaas",
+        [errBody?.error, errBody?.detail].filter(Boolean).join(" — ") ||
+        "Falha ao emitir NF-e junto à Notaas",
       raw: { request: body, response: res.body },
     };
   }
@@ -125,23 +138,26 @@ async function emitir(
     const data = status.body as {
       status?: string;
       chaveAcesso?: string;
-      numero?: string;
-      serie?: string;
-      protocolo?: string;
+      nNf?: number;
+      serie?: number;
+      nProt?: string;
+      cStat?: number;
+      xMotivo?: string;
       pdfUrl?: string;
-      mensagem?: string;
+      xmlUrl?: string;
+      errorMessage?: string;
     };
 
     if (data.status === "issued") {
       return {
         success: true,
         data: {
-          number: data.numero ?? "",
-          series: data.serie ?? "1",
+          number: data.nNf != null ? String(data.nNf) : "",
+          series: data.serie != null ? String(data.serie) : "1",
           accessKey: data.chaveAcesso ?? "",
           protocol: invoiceId, // usado depois para consultarNota/cancelarNota
           status: "AUTORIZADA",
-          xmlUrl: data.pdfUrl,
+          xmlUrl: data.xmlUrl ?? data.pdfUrl,
         },
         raw: { request: body, response: data },
       };
@@ -150,8 +166,9 @@ async function emitir(
     if (data.status === "error" || data.status === "cancelled") {
       return {
         success: false,
-        errorCode: data.status.toUpperCase(),
-        errorMessage: data.mensagem ?? "NF-e rejeitada pela Notaas/SEFAZ",
+        errorCode: data.cStat != null ? `SEFAZ_${data.cStat}` : data.status.toUpperCase(),
+        errorMessage:
+          data.xMotivo ?? data.errorMessage ?? "NF-e rejeitada pela Notaas/SEFAZ",
         raw: { request: body, response: data },
       };
     }
@@ -185,7 +202,7 @@ export const realFiscalProvider: FiscalProvider = {
     }
 
     const res = await notaasFetch(`/nfe/invoices/${invoice.protocol}/status`);
-    const data = res.body as { status?: string; mensagem?: string };
+    const data = res.body as { status?: string; xMotivo?: string };
 
     const statusMap: Record<string, ConsultaNotaResult["status"]> = {
       issued: "AUTORIZADA",
@@ -197,7 +214,7 @@ export const realFiscalProvider: FiscalProvider = {
 
     return {
       success: res.ok,
-      data: { status: statusMap[data.status ?? ""] ?? "PENDENTE", returnMessage: data.mensagem },
+      data: { status: statusMap[data.status ?? ""] ?? "PENDENTE", returnMessage: data.xMotivo },
       raw: { request: { invoiceId: invoice.protocol }, response: data },
     };
   },
@@ -220,7 +237,7 @@ export const realFiscalProvider: FiscalProvider = {
     return {
       success: res.ok,
       data: { cancelada: res.ok },
-      errorMessage: res.ok ? undefined : (res.body as { message?: string })?.message,
+      errorMessage: res.ok ? undefined : (res.body as { error?: string })?.error,
       raw: { request: body, response: res.body },
     };
   },

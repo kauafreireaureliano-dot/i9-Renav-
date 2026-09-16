@@ -8,6 +8,8 @@ export const createCustomerSchema = z.object({
   whatsapp: z.string().optional(),
   email: z.string().email().optional().or(z.literal("")),
   address: z.string().optional(),
+  addressNumber: z.string().optional(),
+  neighborhood: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
   roles: z.array(z.enum(["COMPRADOR", "VENDEDOR", "FORNECEDOR"])).min(1),

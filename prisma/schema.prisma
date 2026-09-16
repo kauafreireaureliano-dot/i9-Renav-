@@ -107,6 +107,8 @@ model Customer {
   whatsapp     String?
   email        String?
   address      String?
+  addressNumber String?
+  neighborhood String?
   city         String?
   state        String?
   roles        CustomerRole[]
