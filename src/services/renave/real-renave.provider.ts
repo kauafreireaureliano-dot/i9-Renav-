@@ -26,12 +26,14 @@ import type {
 // certificado cliente à conexão TLS.
 //
 // Variáveis de ambiente necessárias (nunca commitadas, apenas na Vercel):
-//   RENAVE_BASE_URL              (produção: renave.estaleiro.serpro.gov.br;
-//                                 homologação: hom.renave.estaleiro.serpro.gov.br
+//   RENAVE_BASE_URL              (só tem efeito quando RENAVE_ENVIRONMENT=HOMOLOGACAO;
+//                                 valor esperado: hom.renave.estaleiro.serpro.gov.br
 //                                 — confirmado pelo suporte do RENAVE em 2026-09-18,
 //                                 mesmos endpoints, exige certificado de CNPJ com
-//                                 CNAE automotivo)
-//   RENAVE_TLS_SERVERNAME        (só em homologação: "estaleiro.serpro.gov.br" —
+//                                 CNAE automotivo. Em PRODUCAO este valor é ignorado
+//                                 de propósito — ver IS_HOMOLOGACAO abaixo — pra evitar
+//                                 que produção aponte pro host errado por esquecimento)
+//   RENAVE_TLS_SERVERNAME        (idem, só em homologação: "estaleiro.serpro.gov.br" —
 //                                 o certificado TLS do servidor de homologação
 //                                 tem CN diferente do host "hom.", conforme o
 //                                 guia oficial em /renave-ws/manual/dicas-ssl;
@@ -45,8 +47,16 @@ import type {
 // foram exercitadas — teste primeiro em HOMOLOGACAO antes de confiar em
 // produção; ajuste o que a própria API reclamar via errorMessage/detalhe.
 
-const HOST = process.env.RENAVE_BASE_URL ?? "renave.estaleiro.serpro.gov.br";
-const TLS_SERVERNAME = process.env.RENAVE_TLS_SERVERNAME || undefined;
+// Trava de segurança: RENAVE_BASE_URL/RENAVE_TLS_SERVERNAME só têm efeito
+// quando RENAVE_ENVIRONMENT=HOMOLOGACAO. Em PRODUCAO (ou qualquer outro
+// valor), o host de produção é fixo — mesmo que alguém esqueça de remover a
+// variável de homologação depois de testar, produção nunca vai apontar pro
+// host errado sem querer.
+const IS_HOMOLOGACAO = process.env.RENAVE_ENVIRONMENT === "HOMOLOGACAO";
+const HOST = IS_HOMOLOGACAO
+  ? (process.env.RENAVE_BASE_URL ?? "renave.estaleiro.serpro.gov.br")
+  : "renave.estaleiro.serpro.gov.br";
+const TLS_SERVERNAME = IS_HOMOLOGACAO ? process.env.RENAVE_TLS_SERVERNAME || undefined : undefined;
 const BASE_PATH = "/renave-ws";
 
 function getAgent(): https.Agent {
