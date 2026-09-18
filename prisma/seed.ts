@@ -39,7 +39,7 @@ async function main() {
     ].map((u) =>
       prisma.user.upsert({
         where: { email: u.email },
-        update: {},
+        update: "cpf" in u ? { cpf: u.cpf } : {},
         create: { ...u, passwordHash },
       })
     )
