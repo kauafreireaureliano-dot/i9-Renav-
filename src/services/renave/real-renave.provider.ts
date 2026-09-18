@@ -59,18 +59,35 @@ const HOST = IS_HOMOLOGACAO
 const TLS_SERVERNAME = IS_HOMOLOGACAO ? process.env.RENAVE_TLS_SERVERNAME || undefined : undefined;
 const BASE_PATH = "/renave-ws";
 
+// O runtime de função da Vercel (não é o Node.js "de verdade" — o stack trace
+// aponta pra um shim próprio deles) não sabe interpretar PKCS12 (.pfx),
+// mesmo com --openssl-legacy-provider (confirmado em teste ao vivo em
+// 2026-09-18: erro ERR_CRYPTO_UNSUPPORTED_OPERATION / "Unsupported PKCS12
+// PFX data"). Por isso preferimos cert+key em PEM separados (formato mais
+// simples), com fallback pro .pfx original caso um dia isso passe a
+// funcionar.
 function getAgent(): https.Agent {
+  const certBase64 = process.env.RENAVE_CERTIFICADO_CERT_BASE64;
+  const keyBase64 = process.env.RENAVE_CERTIFICADO_KEY_BASE64;
+  if (certBase64 && keyBase64) {
+    return new https.Agent({
+      cert: Buffer.from(certBase64, "base64").toString("utf8"),
+      key: Buffer.from(keyBase64, "base64").toString("utf8"),
+    });
+  }
+
   const pfxBase64 = process.env.RENAVE_CERTIFICADO_PFX_BASE64;
   const passphrase = process.env.RENAVE_CERTIFICADO_SENHA;
-  if (!pfxBase64 || !passphrase) {
-    throw new Error(
-      "RENAVE_CERTIFICADO_PFX_BASE64 / RENAVE_CERTIFICADO_SENHA não configurados."
-    );
+  if (pfxBase64 && passphrase) {
+    return new https.Agent({
+      pfx: Buffer.from(pfxBase64, "base64"),
+      passphrase,
+    });
   }
-  return new https.Agent({
-    pfx: Buffer.from(pfxBase64, "base64"),
-    passphrase,
-  });
+
+  throw new Error(
+    "Certificado do RENAVE não configurado — defina RENAVE_CERTIFICADO_CERT_BASE64 + RENAVE_CERTIFICADO_KEY_BASE64 (preferido) ou RENAVE_CERTIFICADO_PFX_BASE64 + RENAVE_CERTIFICADO_SENHA."
+  );
 }
 
 interface HttpResult {
