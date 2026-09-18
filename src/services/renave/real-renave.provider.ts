@@ -33,13 +33,19 @@ import type {
 //                                 CNAE automotivo. Em PRODUCAO este valor é ignorado
 //                                 de propósito — ver IS_HOMOLOGACAO abaixo — pra evitar
 //                                 que produção aponte pro host errado por esquecimento)
-//   RENAVE_TLS_SERVERNAME        (idem, só em homologação: "estaleiro.serpro.gov.br" —
-//                                 o certificado TLS do servidor de homologação
-//                                 tem CN diferente do host "hom.", conforme o
-//                                 guia oficial em /renave-ws/manual/dicas-ssl;
-//                                 sem isso o handshake falha por hostname mismatch)
-//   RENAVE_CERTIFICADO_PFX_BASE64 (o .pfx do certificado de máquina, em base64)
-//   RENAVE_CERTIFICADO_SENHA      (senha do .pfx)
+//   RENAVE_TLS_SERVERNAME        (idem, só em homologação: qualquer valor não-vazio —
+//                                 ex. "true" — liga o pulo da validação de hostname
+//                                 do certificado do servidor, que em homologação tem
+//                                 CN diferente do host "hom.", conforme o guia oficial
+//                                 em /renave-ws/manual/dicas-ssl. NÃO usamos mais o
+//                                 valor como SNI — isso causava HTTP 421, ver
+//                                 SKIP_SERVER_CERT_HOSTNAME_CHECK abaixo)
+//   RENAVE_CERTIFICADO_CERT_BASE64 (certificado em PEM, base64 — preferido)
+//   RENAVE_CERTIFICADO_KEY_BASE64  (chave privada em PEM, base64 — preferido)
+//   RENAVE_CERTIFICADO_PFX_BASE64  (alternativa: o .pfx inteiro, base64 —
+//                                  não funciona no runtime da Vercel, mantido só
+//                                  como fallback)
+//   RENAVE_CERTIFICADO_SENHA       (senha do .pfx, só se usar a alternativa acima)
 //
 // AINDA NÃO VALIDADO AO VIVO EM PRODUÇÃO: a consulta de aptidão já foi
 // testada com sucesso contra o RENAVE real (confirmado em 2026-09-18). As
@@ -56,7 +62,15 @@ const IS_HOMOLOGACAO = process.env.RENAVE_ENVIRONMENT === "HOMOLOGACAO";
 const HOST = IS_HOMOLOGACAO
   ? (process.env.RENAVE_BASE_URL ?? "renave.estaleiro.serpro.gov.br")
   : "renave.estaleiro.serpro.gov.br";
-const TLS_SERVERNAME = IS_HOMOLOGACAO ? process.env.RENAVE_TLS_SERVERNAME || undefined : undefined;
+// Não usamos mais `servername` pra "mentir" o hostname na camada TLS — isso
+// causava HTTP 421 (Misdirected Request), porque o SNI (que dizíamos ser
+// estaleiro.serpro.gov.br) ficava inconsistente com o header Host real
+// (hom.renave.estaleiro.serpro.gov.br), e o servidor/proxy rejeitava a
+// requisição por suspeitar de mistura de origens. A solução correta é manter
+// SNI = host de conexão de verdade e só pular a validação final do CN do
+// certificado do servidor (que sabemos ser diferente, conforme o guia
+// oficial de SSL do RENAVE) — só em homologação, nunca em produção.
+const SKIP_SERVER_CERT_HOSTNAME_CHECK = IS_HOMOLOGACAO && !!process.env.RENAVE_TLS_SERVERNAME;
 const BASE_PATH = "/renave-ws";
 
 // O runtime de função da Vercel (não é o Node.js "de verdade" — o stack trace
@@ -101,10 +115,10 @@ function request(method: string, path: string, body?: unknown): Promise<HttpResu
     const req = https.request(
       {
         host: HOST,
-        servername: TLS_SERVERNAME,
         path: `${BASE_PATH}${path}`,
         method,
         agent: getAgent(),
+        ...(SKIP_SERVER_CERT_HOSTNAME_CHECK ? { checkServerIdentity: () => undefined } : {}),
         headers: {
           "Content-Type": "application/json;charset=UTF-8",
           Accept: "application/json",
