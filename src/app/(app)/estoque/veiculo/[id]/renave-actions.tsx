@@ -15,8 +15,8 @@ interface Props {
 const STEPS: Array<{ action: string; label: string }> = [
   { action: "consultarAptidao", label: "Consultar aptidão" },
   { action: "solicitarEntradaEstoque", label: "Solicitar entrada em estoque" },
-  { action: "enviarAtpvAssinatura", label: "Registrar ATPV" },
   { action: "consultarAtpv", label: "Consultar ATPV" },
+  { action: "consultarEstoque", label: "Consultar estoque" },
 ];
 
 export function RenaveActions({ vehicleId, status, aptitudeResult }: Props) {
@@ -49,7 +49,7 @@ export function RenaveActions({ vehicleId, status, aptitudeResult }: Props) {
           toast[result.data.apto ? "success" : "warning"](
             result.data.apto
               ? "✓ Veículo apto para entrada"
-              : `✕ Não apto: ${result.data.motivo ?? "sem detalhes"}`
+              : `✕ Não apto: ${result.data.motivosParaNaoAptidao?.join("; ") ?? "sem detalhes"}`
           );
         } else {
           toast.success("Operação concluída no ambiente de teste (MOCK).");

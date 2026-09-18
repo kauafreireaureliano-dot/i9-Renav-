@@ -8,6 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const FIELDS: Array<{ name: string; label: string; type?: string; required?: boolean }> = [
   { name: "plate", label: "Placa", required: true },
@@ -24,6 +31,8 @@ const FIELDS: Array<{ name: string; label: string; type?: string; required?: boo
   { name: "mileage", label: "Quilometragem", type: "number", required: true },
   { name: "category", label: "Categoria" },
   { name: "bodyType", label: "Carroceria" },
+  { name: "numeroCrv", label: "Número do CRV" },
+  { name: "codigoSegurancaCrv", label: "Código de segurança do CRV" },
   { name: "purchaseValue", label: "Valor de compra (R$)", type: "number", required: true },
   { name: "announcedPrice", label: "Preço anunciado (R$)", type: "number", required: true },
   { name: "minimumSalePrice", label: "Preço mínimo de venda (R$)", type: "number", required: true },
@@ -35,6 +44,7 @@ const FIELDS: Array<{ name: string; label: string; type?: string; required?: boo
 export function VehicleForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [crvType, setCrvType] = useState<string>("");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -45,6 +55,7 @@ export function VehicleForm() {
     formData.forEach((value, key) => {
       if (value !== "") payload[key] = value;
     });
+    if (crvType) payload.crvType = crvType;
 
     try {
       const res = await fetch("/api/vehicles", {
@@ -86,6 +97,20 @@ export function VehicleForm() {
               />
             </div>
           ))}
+          <div className="space-y-2">
+            <Label htmlFor="crvType">Tipo do CRV</Label>
+            <Select value={crvType} onValueChange={setCrvType}>
+              <SelectTrigger id="crvType">
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="AZUL">Azul</SelectItem>
+                <SelectItem value="VERDE">Verde</SelectItem>
+                <SelectItem value="BRANCO">Branco</SelectItem>
+                <SelectItem value="DIGITAL">Digital</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-2 sm:col-span-2 lg:col-span-3">
             <Label htmlFor="notes">Observações</Label>
             <Textarea id="notes" name="notes" rows={3} />

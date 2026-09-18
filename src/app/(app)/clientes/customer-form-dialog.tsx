@@ -56,6 +56,7 @@ export function CustomerFormDialog() {
       address: formData.get("address") || undefined,
       addressNumber: formData.get("addressNumber") || undefined,
       neighborhood: formData.get("neighborhood") || undefined,
+      zipCode: formData.get("zipCode") || undefined,
       city: formData.get("city") || undefined,
       state: formData.get("state") || undefined,
       roles,
@@ -138,10 +139,14 @@ export function CustomerFormDialog() {
               <Input id="addressNumber" name="addressNumber" />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label htmlFor="neighborhood">Bairro</Label>
               <Input id="neighborhood" name="neighborhood" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="zipCode">CEP</Label>
+              <Input id="zipCode" name="zipCode" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="city">Cidade</Label>
@@ -153,7 +158,7 @@ export function CustomerFormDialog() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground -mt-2">
-            Endereço completo (com bairro) é obrigatório para emitir NF-e real para este cliente.
+            Endereço completo (com bairro e CEP) é obrigatório para NF-e e RENAVE reais.
           </p>
           <div className="space-y-2">
             <Label>Papéis</Label>

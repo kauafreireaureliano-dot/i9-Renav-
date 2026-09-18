@@ -31,6 +31,7 @@ model User {
   passwordHash String
   role         UserRole
   active       Boolean  @default(true)
+  cpf          String?  // obrigatório para operações reais no RENAVE (cpfOperadorResponsavel)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -109,6 +110,7 @@ model Customer {
   address      String?
   addressNumber String?
   neighborhood String?
+  zipCode      String? // CEP — exigido pela API real do RENAVE na saída de estoque
   city         String?
   state        String?
   roles        CustomerRole[]
@@ -139,6 +141,14 @@ enum VehicleStatus {
   CANCELADO
 }
 
+// Tipos de CRV aceitos pela API real do RENAVE (aptidão/entrada/saída de estoque)
+enum CrvType {
+  AZUL
+  VERDE
+  BRANCO
+  DIGITAL
+}
+
 model Vehicle {
   id            String   @id @default(uuid())
   plate         String   @unique
@@ -155,6 +165,11 @@ model Vehicle {
   mileage       Int
   category      String?
   bodyType      String?
+
+  // Dados do documento do veículo (CRV/CRLV), exigidos pela API real do RENAVE
+  crvType             CrvType? // AZUL | VERDE | BRANCO | DIGITAL
+  numeroCrv           String?
+  codigoSegurancaCrv  String?
 
   purchaseValue     Decimal @db.Decimal(12, 2)
   announcedPrice    Decimal @db.Decimal(12, 2)
@@ -386,6 +401,7 @@ model RenaveOperation {
   vehicleId      String                 @unique
   status         RenaveOperationStatus  @default(NAO_INICIADO)
   aptitudeResult String? // motivo/detalhe da última consulta de aptidão
+  idEstoqueRenave Int? // id retornado pelo RENAVE ao solicitar entrada/saída — usado nas chamadas seguintes (ATPV, NF, cancelamento, termos)
   environment    String                 @default("MOCK") // MOCK | PRODUCAO
   lastCommunicationAt DateTime?
   createdAt      DateTime               @default(now())

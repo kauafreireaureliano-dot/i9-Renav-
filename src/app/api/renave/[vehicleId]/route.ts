@@ -8,10 +8,9 @@ const actionSchema = z.object({
   action: z.enum([
     "consultarAptidao",
     "solicitarEntradaEstoque",
-    "enviarAtpvAssinatura",
     "consultarAtpv",
     "solicitarSaidaEstoque",
-    "consultarSaidaEstoque",
+    "consultarEstoque",
     "cancelarEntrada",
     "cancelarSaida",
   ]),

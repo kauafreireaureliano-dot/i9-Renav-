@@ -67,7 +67,7 @@ describe("getSaleFlowSteps", () => {
     const steps = getSaleFlowSteps({
       events: [
         { operation: "solicitarSaidaEstoque", status: "SUCESSO" },
-        { operation: "enviarAtpvAssinatura", status: "SUCESSO" },
+        { operation: "consultarAtpv", status: "SUCESSO" },
       ],
       invoices: [],
       vehicleStatus: "RESERVADO",

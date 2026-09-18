@@ -42,7 +42,7 @@ export function getPurchaseFlowSteps(params: {
     ? (aptidaoEvent.responseSanitized as { apto?: boolean } | undefined)?.apto !== false
     : undefined;
   const entradaDone = !!findSuccess(events, "solicitarEntradaEstoque");
-  const atpvDone = !!findSuccess(events, "enviarAtpvAssinatura");
+  const atpvDone = !!findSuccess(events, "consultarAtpv");
   const nfEntradaDone = invoices.some((i) => i.type === "ENTRADA" && i.status === "AUTORIZADA");
   const stockConfirmed = !["AGUARDANDO_ENTRADA", "AGUARDANDO_DOCUMENTACAO", "DOCUMENTACAO_PENDENTE"].includes(
     vehicleStatus
@@ -66,8 +66,8 @@ export function getPurchaseFlowSteps(params: {
     },
     {
       key: "atpv",
-      label: "Registrar ATPV",
-      action: "enviarAtpvAssinatura",
+      label: "Consultar assinatura do ATPV",
+      action: "consultarAtpv",
       status: atpvDone ? "done" : entradaDone ? "available" : "blocked",
     },
     {
@@ -93,7 +93,7 @@ export function getSaleFlowSteps(params: {
   const { events, invoices, vehicleStatus } = params;
 
   const saidaDone = !!findSuccess(events, "solicitarSaidaEstoque");
-  const atpvDone = !!findSuccess(events, "enviarAtpvAssinatura");
+  const atpvDone = !!findSuccess(events, "consultarAtpv");
   const nfSaidaDone = invoices.some((i) => i.type === "SAIDA" && i.status === "AUTORIZADA");
   const finalized = vehicleStatus === "VENDIDO" || vehicleStatus === "FINALIZADO";
 
@@ -106,8 +106,8 @@ export function getSaleFlowSteps(params: {
     },
     {
       key: "atpv",
-      label: "Obter ATPV",
-      action: "enviarAtpvAssinatura",
+      label: "Consultar assinatura do ATPV",
+      action: "consultarAtpv",
       status: atpvDone ? "done" : saidaDone ? "available" : "blocked",
     },
     {

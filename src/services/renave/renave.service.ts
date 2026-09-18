@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { sanitizeForLog } from "@/lib/sanitize";
+import { getMunicipioCode } from "@/lib/ibge";
 import { mockRenaveService } from "./mock-renave.service";
 import { realRenaveProvider } from "./real-renave.provider";
-import type { RenaveProvider, RenaveOperationContext, RenaveCallResult } from "@/domain/renave";
+import type { RenaveProvider, RenaveCallResult } from "@/domain/renave";
 import type { RenaveOperationStatus } from "@prisma/client";
 
 function getEnvironment(): "MOCK" | "PRODUCAO" {
@@ -13,15 +14,12 @@ function getProvider(): RenaveProvider {
   return getEnvironment() === "PRODUCAO" ? realRenaveProvider : mockRenaveService;
 }
 
-async function buildContext(vehicleId: string, userId: string): Promise<RenaveOperationContext> {
-  const vehicle = await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicleId } });
-  return {
-    vehicleId,
-    renavam: vehicle.renavam,
-    chassis: vehicle.chassis,
-    plate: vehicle.plate,
-    userId,
-  };
+function onlyDigits(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 async function recordEvent<T>(
@@ -40,7 +38,6 @@ async function recordEvent<T>(
     data: {
       renaveOperationId: renaveOperation.id,
       operation,
-      requestId: "requestId" in result ? result.requestId : undefined,
       status: result.success ? "SUCESSO" : "ERRO",
       requestSanitized: sanitizeForLog(result.raw.request) as never,
       responseSanitized: sanitizeForLog(result.raw.response) as never,
@@ -55,25 +52,58 @@ async function recordEvent<T>(
 }
 
 async function setStatus(vehicleId: string, status: RenaveOperationStatus, aptitudeResult?: string) {
-  await prisma.renaveOperation.update({
-    where: { vehicleId },
-    data: { status, aptitudeResult },
-  });
+  await prisma.renaveOperation.update({ where: { vehicleId }, data: { status, aptitudeResult } });
+}
+
+async function getOperatorCpf(userId: string): Promise<string> {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  if (!user.cpf) {
+    throw new Error(
+      `Usuário ${user.name} não tem CPF cadastrado — obrigatório para operações no RENAVE.`
+    );
+  }
+  return onlyDigits(user.cpf);
+}
+
+function requireCrvData(vehicle: {
+  crvType: string | null;
+  codigoSegurancaCrv: string | null;
+  numeroCrv: string | null;
+}) {
+  if (!vehicle.crvType || !vehicle.codigoSegurancaCrv) {
+    throw new Error(
+      "Veículo sem tipo/código de segurança do CRV cadastrado — obrigatório para o RENAVE. Complete o cadastro do veículo."
+    );
+  }
+  return {
+    tipoCrv: vehicle.crvType as "AZUL" | "VERDE" | "BRANCO" | "DIGITAL",
+    codigoSegurancaCrv: vehicle.codigoSegurancaCrv,
+    numeroCrv: vehicle.numeroCrv ?? undefined,
+  };
 }
 
 export const RenaveService = {
   environment: getEnvironment,
 
   async consultarAptidao(vehicleId: string, userId: string) {
-    const ctx = await buildContext(vehicleId, userId);
-    const result = await getProvider().consultarAptidao(ctx);
+    const vehicle = await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicleId } });
+    const crv = requireCrvData(vehicle);
+
+    const input = {
+      placa: vehicle.plate,
+      renavam: vehicle.renavam,
+      numeroCrv: crv.numeroCrv,
+      tipoCrv: crv.tipoCrv,
+    };
+
+    const result = await getProvider().consultarAptidao(input);
     await recordEvent(vehicleId, userId, "consultarAptidao", result);
 
     if (result.success && result.data) {
       await setStatus(
         vehicleId,
         result.data.apto ? "APTO" : "NAO_APTO",
-        result.data.apto ? undefined : result.data.motivo
+        result.data.apto ? undefined : result.data.motivosParaNaoAptidao.join("; ")
       );
     } else {
       await setStatus(vehicleId, "ERRO", result.errorMessage);
@@ -83,81 +113,195 @@ export const RenaveService = {
   },
 
   async solicitarEntradaEstoque(vehicleId: string, userId: string) {
-    const ctx = await buildContext(vehicleId, userId);
-    const result = await getProvider().solicitarEntradaEstoque(ctx);
-    await recordEvent(vehicleId, userId, "solicitarEntradaEstoque", result);
-    await setStatus(
-      vehicleId,
-      result.success ? "ENTRADA_CONCLUIDA" : "ERRO",
-      result.success ? undefined : result.errorMessage
-    );
-    return result;
-  },
+    const vehicle = await prisma.vehicle.findUniqueOrThrow({
+      where: { id: vehicleId },
+      include: { purchase: { include: { seller: true } } },
+    });
+    const crv = requireCrvData(vehicle);
+    const cpfOperador = await getOperatorCpf(userId);
 
-  async enviarAtpvAssinatura(vehicleId: string, userId: string) {
-    const ctx = await buildContext(vehicleId, userId);
-    const result = await getProvider().enviarAtpvAssinatura(ctx);
-    await recordEvent(vehicleId, userId, "enviarAtpvAssinatura", result);
-    await setStatus(vehicleId, result.success ? "ATPV_ENVIADO" : "ERRO", result.errorMessage);
-    return result;
-  },
-
-  async consultarAtpv(vehicleId: string, userId: string) {
-    const ctx = await buildContext(vehicleId, userId);
-    const result = await getProvider().consultarAtpv(ctx);
-    await recordEvent(vehicleId, userId, "consultarAtpv", result);
-    if (result.success && result.data?.status === "ASSINADO") {
-      await setStatus(vehicleId, "ATPV_ASSINADO");
+    if (!vehicle.purchase) {
+      throw new Error("Veículo não tem compra/vendedor registrado — cadastre a compra antes.");
     }
+
+    const seller = vehicle.purchase.seller;
+    const input = {
+      cpfOperadorResponsavel: cpfOperador,
+      dataCompra: vehicle.purchase.purchaseDate.toISOString().slice(0, 10),
+      emailVendedor: seller.email ?? undefined,
+      valorCompra: Number(vehicle.purchase.value),
+      veiculo: {
+        codigoSegurancaCrv: crv.codigoSegurancaCrv,
+        numeroCrv: crv.numeroCrv,
+        placa: vehicle.plate,
+        renavam: vehicle.renavam,
+        tipoCrv: crv.tipoCrv,
+        quilometragemHodometro: vehicle.mileage,
+        dataHoraMedicaoHodometro: new Date().toISOString(),
+        documentoProprietarioAtual: onlyDigits(seller.document),
+        tipoDocumentoProprietarioAtual: seller.documentType === "CNPJ" ? "CNPJ" as const : "CPF" as const,
+      },
+    };
+
+    const result = await getProvider().solicitarEntradaEstoque(input);
+    await recordEvent(vehicleId, userId, "solicitarEntradaEstoque", result);
+
+    if (result.success && result.data) {
+      await prisma.renaveOperation.update({
+        where: { vehicleId },
+        data: { status: "ENTRADA_CONCLUIDA", idEstoqueRenave: result.data.idEstoque },
+      });
+    } else {
+      await setStatus(vehicleId, "ERRO", result.errorMessage);
+    }
+
     return result;
   },
 
   async solicitarSaidaEstoque(vehicleId: string, userId: string) {
-    const ctx = await buildContext(vehicleId, userId);
-    const result = await getProvider().solicitarSaidaEstoque(ctx);
+    const vehicle = await prisma.vehicle.findUniqueOrThrow({
+      where: { id: vehicleId },
+      include: { sale: { include: { buyer: true } } },
+    });
+    const crv = requireCrvData(vehicle);
+    const cpfOperador = await getOperatorCpf(userId);
+
+    if (!vehicle.sale) {
+      throw new Error("Veículo não tem venda/comprador registrado — cadastre a venda antes.");
+    }
+
+    const buyer = vehicle.sale.buyer;
+    if (
+      !buyer.address ||
+      !buyer.addressNumber ||
+      !buyer.neighborhood ||
+      !buyer.zipCode ||
+      !buyer.city ||
+      !buyer.state
+    ) {
+      throw new Error(
+        `Cadastro do comprador (${buyer.name}) está incompleto (endereço/bairro/CEP) — obrigatório para o RENAVE. Complete em Clientes.`
+      );
+    }
+
+    const codigoMunicipio = await getMunicipioCode(buyer.city, buyer.state);
+    if (!codigoMunicipio) {
+      throw new Error(`Não foi possível identificar o código IBGE do município "${buyer.city}/${buyer.state}".`);
+    }
+
+    const input = {
+      cpfOperadorResponsavel: cpfOperador,
+      dataVenda: vehicle.sale.saleDate.toISOString().slice(0, 10),
+      valorVenda: Number(vehicle.sale.value),
+      veiculo: {
+        codigoSegurancaCrv: crv.codigoSegurancaCrv,
+        numeroCrv: crv.numeroCrv,
+        placa: vehicle.plate,
+        renavam: vehicle.renavam,
+      },
+      comprador: {
+        nome: buyer.name,
+        numeroDocumento: onlyDigits(buyer.document),
+        tipoDocumento: buyer.documentType === "CNPJ" ? "CNPJ" as const : "CPF" as const,
+        email: buyer.email ?? undefined,
+        endereco: {
+          logradouro: buyer.address,
+          numero: buyer.addressNumber,
+          bairro: buyer.neighborhood,
+          cep: onlyDigits(buyer.zipCode),
+          codigoMunicipio: Number(codigoMunicipio),
+        },
+      },
+    };
+
+    const result = await getProvider().solicitarSaidaEstoque(input);
     await recordEvent(vehicleId, userId, "solicitarSaidaEstoque", result);
-    await setStatus(
-      vehicleId,
-      result.success ? "SAIDA_CONCLUIDA" : "ERRO",
-      result.success ? undefined : result.errorMessage
-    );
+
+    if (result.success && result.data) {
+      await prisma.renaveOperation.update({
+        where: { vehicleId },
+        data: { status: "SAIDA_CONCLUIDA", idEstoqueRenave: result.data.idEstoque },
+      });
+    } else {
+      await setStatus(vehicleId, "ERRO", result.errorMessage);
+    }
+
     return result;
   },
 
-  async consultarSaidaEstoque(vehicleId: string, userId: string) {
-    const ctx = await buildContext(vehicleId, userId);
-    const result = await getProvider().consultarSaidaEstoque(ctx);
-    await recordEvent(vehicleId, userId, "consultarSaidaEstoque", result);
+  async consultarEstoque(vehicleId: string, userId: string) {
+    const operation = await prisma.renaveOperation.findUniqueOrThrow({ where: { vehicleId } });
+    if (!operation.idEstoqueRenave) {
+      throw new Error("Este veículo ainda não tem um registro de estoque no RENAVE.");
+    }
+    const result = await getProvider().consultarEstoque(operation.idEstoqueRenave);
+    await recordEvent(vehicleId, userId, "consultarEstoque", result);
     return result;
   },
 
-  async enviarNotaFiscalEntrada(vehicleId: string, userId: string, accessKey: string) {
-    const ctx = await buildContext(vehicleId, userId);
-    const result = await getProvider().enviarNotaFiscalEntrada(ctx, accessKey);
-    await recordEvent(vehicleId, userId, "enviarNotaFiscalEntrada", result);
-    return result;
-  },
-
-  async enviarNotaFiscalSaida(vehicleId: string, userId: string, accessKey: string) {
-    const ctx = await buildContext(vehicleId, userId);
-    const result = await getProvider().enviarNotaFiscalSaida(ctx, accessKey);
-    await recordEvent(vehicleId, userId, "enviarNotaFiscalSaida", result);
+  async enviarNotaFiscal(
+    vehicleId: string,
+    userId: string,
+    chaveNotaFiscal: string,
+    evento: "COMPRA" | "VENDA"
+  ) {
+    const operation = await prisma.renaveOperation.findUniqueOrThrow({ where: { vehicleId } });
+    if (!operation.idEstoqueRenave) {
+      throw new Error("Este veículo ainda não tem um registro de estoque no RENAVE.");
+    }
+    const result = await getProvider().enviarNotaFiscal({
+      idEstoque: operation.idEstoqueRenave,
+      chaveNotaFiscal,
+      evento,
+    });
+    await recordEvent(vehicleId, userId, "enviarNotaFiscal", result);
     return result;
   },
 
   async cancelarEntrada(vehicleId: string, userId: string) {
-    const ctx = await buildContext(vehicleId, userId);
-    const result = await getProvider().cancelarEntrada(ctx);
+    const vehicle = await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicleId } });
+    const crv = requireCrvData(vehicle);
+    const cpfOperador = await getOperatorCpf(userId);
+
+    const result = await getProvider().cancelarEntrada({
+      cpfOperadorResponsavel: cpfOperador,
+      dataCancelamentoEstoque: today(),
+      veiculo: {
+        placa: vehicle.plate,
+        renavam: vehicle.renavam,
+        numeroCrv: crv.numeroCrv,
+        codigoSegurancaCrv: crv.codigoSegurancaCrv,
+      },
+    });
     await recordEvent(vehicleId, userId, "cancelarEntrada", result);
-    await setStatus(vehicleId, "CANCELADO");
+    if (result.success) await setStatus(vehicleId, "CANCELADO");
     return result;
   },
 
   async cancelarSaida(vehicleId: string, userId: string) {
-    const ctx = await buildContext(vehicleId, userId);
-    const result = await getProvider().cancelarSaida(ctx);
+    const operation = await prisma.renaveOperation.findUniqueOrThrow({ where: { vehicleId } });
+    if (!operation.idEstoqueRenave) {
+      throw new Error("Este veículo ainda não tem um registro de estoque no RENAVE.");
+    }
+    const cpfOperador = await getOperatorCpf(userId);
+
+    const result = await getProvider().cancelarSaida({
+      cpfOperadorResponsavel: cpfOperador,
+      dataCancelamentoSaidaEstoque: today(),
+      idEstoque: operation.idEstoqueRenave,
+    });
     await recordEvent(vehicleId, userId, "cancelarSaida", result);
-    await setStatus(vehicleId, "CANCELADO");
+    if (result.success) await setStatus(vehicleId, "CANCELADO");
+    return result;
+  },
+
+  async consultarAtpv(vehicleId: string, userId: string) {
+    const vehicle = await prisma.vehicle.findUniqueOrThrow({ where: { id: vehicleId } });
+    const result = await getProvider().consultarAtpv(vehicle.plate, vehicle.renavam);
+    await recordEvent(vehicleId, userId, "consultarAtpv", result);
+    if (result.success && result.data?.estadoIntencaoVenda === "CONSUMIDA") {
+      await setStatus(vehicleId, "ATPV_ASSINADO");
+    }
     return result;
   },
 };

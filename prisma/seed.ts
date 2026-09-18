@@ -31,7 +31,7 @@ async function main() {
 
   const users = await Promise.all(
     [
-      { name: "Administrador", email: "admin@i9car.com.br", role: "ADMIN" as const },
+      { name: "Administrador", email: "admin@i9car.com.br", role: "ADMIN" as const, cpf: "000.000.000-00" },
       { name: "Gerente Geral", email: "gerente@i9car.com.br", role: "GERENTE" as const },
       { name: "Vendedor Teste", email: "vendedor@i9car.com.br", role: "VENDEDOR" as const },
       { name: "Financeiro Teste", email: "financeiro@i9car.com.br", role: "FINANCEIRO" as const },

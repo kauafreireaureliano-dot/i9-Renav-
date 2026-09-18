@@ -28,7 +28,7 @@ interface Props {
 const RENAVE_ACTIONS = new Set([
   "consultarAptidao",
   "solicitarEntradaEstoque",
-  "enviarAtpvAssinatura",
+  "consultarAtpv",
   "solicitarSaidaEstoque",
 ]);
 
@@ -66,7 +66,7 @@ export function FlowTimeline({ vehicleId, flowType, steps, counterpartName, sale
           `⚠ Pendência (${result.errorCode ?? "erro"}): ${result.errorMessage ?? "operação não concluída"}`
         );
       } else if (action === "consultarAptidao" && result.data?.apto === false) {
-        toast.warning(`✕ Não apto: ${result.data.motivo ?? "sem detalhes"}`);
+        toast.warning(`✕ Não apto: ${result.data.motivosParaNaoAptidao?.join("; ") ?? "sem detalhes"}`);
       } else {
         toast.success("Operação concluída no ambiente de teste (MOCK).");
       }

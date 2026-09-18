@@ -10,6 +10,7 @@ export const createCustomerSchema = z.object({
   address: z.string().optional(),
   addressNumber: z.string().optional(),
   neighborhood: z.string().optional(),
+  zipCode: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
   roles: z.array(z.enum(["COMPRADOR", "VENDEDOR", "FORNECEDOR"])).min(1),

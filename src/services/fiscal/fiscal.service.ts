@@ -90,6 +90,7 @@ async function buildInvoicePayload(
           logradouro: counterpart.address ?? undefined,
           numero: counterpart.addressNumber ?? "S/N",
           bairro: counterpart.neighborhood ?? undefined,
+          cep: counterpart.zipCode ?? undefined,
           cidade: counterpart.city ?? undefined,
           uf: counterpart.state ?? undefined,
           codigoMunicipio,
