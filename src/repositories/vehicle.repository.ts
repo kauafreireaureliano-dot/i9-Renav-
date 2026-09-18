@@ -71,3 +71,7 @@ export async function createVehicle(data: CreateVehicleInput) {
 export function updateVehicleStatus(id: string, status: VehicleStatus) {
   return prisma.vehicle.update({ where: { id }, data: { status } });
 }
+
+export function updateVehicle(id: string, data: Prisma.VehicleUpdateInput) {
+  return prisma.vehicle.update({ where: { id }, data });
+}

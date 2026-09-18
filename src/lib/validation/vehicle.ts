@@ -18,9 +18,9 @@ export const createVehicleSchema = z.object({
   crvType: z.enum(["AZUL", "VERDE", "BRANCO", "DIGITAL"]).optional(),
   numeroCrv: z.string().optional(),
   codigoSegurancaCrv: z.string().optional(),
-  purchaseValue: z.coerce.number().min(0),
+  purchaseValue: z.coerce.number().min(0).optional(),
   announcedPrice: z.coerce.number().min(0),
-  minimumSalePrice: z.coerce.number().min(0),
+  minimumSalePrice: z.coerce.number().min(0).optional(),
   purchaseDate: z.coerce.date().optional(),
   entryDate: z.coerce.date().optional(),
   origin: z.string().optional(),
@@ -28,3 +28,7 @@ export const createVehicleSchema = z.object({
 });
 
 export type CreateVehicleInput = z.infer<typeof createVehicleSchema>;
+
+export const updateVehicleSchema = createVehicleSchema.partial();
+
+export type UpdateVehicleInput = z.infer<typeof updateVehicleSchema>;

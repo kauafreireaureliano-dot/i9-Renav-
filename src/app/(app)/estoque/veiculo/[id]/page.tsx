@@ -7,6 +7,7 @@ import { formatCurrency, formatDateTime } from "@/lib/format";
 import { VEHICLE_STATUS_LABELS, VEHICLE_STATUS_TONE } from "@/lib/vehicle-status";
 import { RenaveActions } from "./renave-actions";
 import { FlowTimeline } from "./flow-timeline";
+import { VehicleEditDialog } from "./vehicle-edit-dialog";
 import { getActiveFlow, getPurchaseFlowSteps, getSaleFlowSteps } from "@/lib/vehicle-flow";
 
 export default async function VeiculoPage({ params }: PageProps<"/estoque/veiculo/[id]">) {
@@ -51,9 +52,38 @@ export default async function VeiculoPage({ params }: PageProps<"/estoque/veicul
             {vehicle.mileage.toLocaleString("pt-BR")} km
           </p>
         </div>
-        <Badge variant={VEHICLE_STATUS_TONE[vehicle.status]}>
-          {VEHICLE_STATUS_LABELS[vehicle.status]}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant={VEHICLE_STATUS_TONE[vehicle.status]}>
+            {VEHICLE_STATUS_LABELS[vehicle.status]}
+          </Badge>
+          <VehicleEditDialog
+            vehicle={{
+              id: vehicle.id,
+              plate: vehicle.plate,
+              renavam: vehicle.renavam,
+              chassis: vehicle.chassis,
+              brand: vehicle.brand,
+              model: vehicle.model,
+              version: vehicle.version,
+              yearManufacture: vehicle.yearManufacture,
+              yearModel: vehicle.yearModel,
+              color: vehicle.color,
+              fuel: vehicle.fuel,
+              transmission: vehicle.transmission,
+              mileage: vehicle.mileage,
+              category: vehicle.category,
+              bodyType: vehicle.bodyType,
+              crvType: vehicle.crvType,
+              numeroCrv: vehicle.numeroCrv,
+              codigoSegurancaCrv: vehicle.codigoSegurancaCrv,
+              purchaseValue: vehicle.purchaseValue.toString(),
+              announcedPrice: vehicle.announcedPrice.toString(),
+              minimumSalePrice: vehicle.minimumSalePrice.toString(),
+              origin: vehicle.origin,
+              notes: vehicle.notes,
+            }}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

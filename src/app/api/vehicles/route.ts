@@ -40,7 +40,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const vehicle = await createVehicle(parsed.data);
+    const vehicle = await createVehicle({
+      ...parsed.data,
+      purchaseValue: parsed.data.purchaseValue ?? 0,
+      minimumSalePrice: parsed.data.minimumSalePrice ?? 0,
+    });
 
     await logAudit({
       userId: user.id,
