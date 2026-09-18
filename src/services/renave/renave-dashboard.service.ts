@@ -33,6 +33,9 @@ export async function getRenaveDashboardData() {
     erros,
     cancelamentos,
     ultimosEventos,
-    environment: process.env.RENAVE_ENVIRONMENT === "PRODUCAO" ? "PRODUCAO" : "MOCK",
+    environment:
+      process.env.RENAVE_ENVIRONMENT === "PRODUCAO" || process.env.RENAVE_ENVIRONMENT === "HOMOLOGACAO"
+        ? process.env.RENAVE_ENVIRONMENT
+        : "MOCK",
   };
 }

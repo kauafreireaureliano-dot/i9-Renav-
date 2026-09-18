@@ -26,17 +26,27 @@ import type {
 // certificado cliente à conexão TLS.
 //
 // Variáveis de ambiente necessárias (nunca commitadas, apenas na Vercel):
-//   RENAVE_BASE_URL              (default: renave.estaleiro.serpro.gov.br)
+//   RENAVE_BASE_URL              (produção: renave.estaleiro.serpro.gov.br;
+//                                 homologação: hom.renave.estaleiro.serpro.gov.br
+//                                 — confirmado pelo suporte do RENAVE em 2026-09-18,
+//                                 mesmos endpoints, exige certificado de CNPJ com
+//                                 CNAE automotivo)
+//   RENAVE_TLS_SERVERNAME        (só em homologação: "estaleiro.serpro.gov.br" —
+//                                 o certificado TLS do servidor de homologação
+//                                 tem CN diferente do host "hom.", conforme o
+//                                 guia oficial em /renave-ws/manual/dicas-ssl;
+//                                 sem isso o handshake falha por hostname mismatch)
 //   RENAVE_CERTIFICADO_PFX_BASE64 (o .pfx do certificado de máquina, em base64)
 //   RENAVE_CERTIFICADO_SENHA      (senha do .pfx)
 //
-// AINDA NÃO VALIDADO AO VIVO: diferente da integração fiscal (testada de
-// ponta a ponta contra o sandbox da Notaas), esta implementação ainda não
-// foi exercitada contra o RENAVE de verdade — só temos a documentação, não
-// uma chamada real bem-sucedida. Teste com cuidado antes de confiar em
+// AINDA NÃO VALIDADO AO VIVO EM PRODUÇÃO: a consulta de aptidão já foi
+// testada com sucesso contra o RENAVE real (confirmado em 2026-09-18). As
+// operações de escrita (entrada/saída/cancelamento/nota fiscal) ainda não
+// foram exercitadas — teste primeiro em HOMOLOGACAO antes de confiar em
 // produção; ajuste o que a própria API reclamar via errorMessage/detalhe.
 
 const HOST = process.env.RENAVE_BASE_URL ?? "renave.estaleiro.serpro.gov.br";
+const TLS_SERVERNAME = process.env.RENAVE_TLS_SERVERNAME || undefined;
 const BASE_PATH = "/renave-ws";
 
 function getAgent(): https.Agent {
@@ -64,6 +74,7 @@ function request(method: string, path: string, body?: unknown): Promise<HttpResu
     const req = https.request(
       {
         host: HOST,
+        servername: TLS_SERVERNAME,
         path: `${BASE_PATH}${path}`,
         method,
         agent: getAgent(),

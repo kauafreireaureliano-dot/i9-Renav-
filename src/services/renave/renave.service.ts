@@ -6,12 +6,18 @@ import { realRenaveProvider } from "./real-renave.provider";
 import type { RenaveProvider, RenaveCallResult } from "@/domain/renave";
 import type { RenaveOperationStatus } from "@prisma/client";
 
-function getEnvironment(): "MOCK" | "PRODUCAO" {
-  return process.env.RENAVE_ENVIRONMENT === "PRODUCAO" ? "PRODUCAO" : "MOCK";
+function getEnvironment(): "MOCK" | "HOMOLOGACAO" | "PRODUCAO" {
+  const raw = process.env.RENAVE_ENVIRONMENT;
+  if (raw === "PRODUCAO" || raw === "HOMOLOGACAO") return raw;
+  return "MOCK";
 }
 
+// HOMOLOGACAO usa o mesmo realRenaveProvider que PRODUCAO — a diferença é só
+// o host (RENAVE_BASE_URL aponta para hom.renave.estaleiro.serpro.gov.br em
+// vez do domínio de produção), confirmado pelo suporte do RENAVE em
+// 2026-09-18: os mesmos endpoints existem em homologação, só muda a URL.
 function getProvider(): RenaveProvider {
-  return getEnvironment() === "PRODUCAO" ? realRenaveProvider : mockRenaveService;
+  return getEnvironment() === "MOCK" ? mockRenaveService : realRenaveProvider;
 }
 
 function onlyDigits(value: string): string {

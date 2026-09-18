@@ -10,7 +10,12 @@ export default async function ConfiguracoesPage() {
     getCurrentUser(),
   ]);
 
-  const renaveEnv = process.env.RENAVE_ENVIRONMENT === "PRODUCAO" ? "PRODUÇÃO" : "AMBIENTE DE TESTE";
+  const renaveEnv =
+    process.env.RENAVE_ENVIRONMENT === "PRODUCAO"
+      ? "PRODUÇÃO"
+      : process.env.RENAVE_ENVIRONMENT === "HOMOLOGACAO"
+        ? "HOMOLOGAÇÃO (RENAVE)"
+        : "AMBIENTE DE TESTE (MOCK)";
   const fiscalEnv = process.env.FISCAL_ENVIRONMENT === "PRODUCAO" ? "PRODUÇÃO" : "AMBIENTE DE TESTE";
 
   return (
