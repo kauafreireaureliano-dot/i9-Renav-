@@ -95,6 +95,14 @@ async function getOperatorCpf(userId: string): Promise<string> {
   return digits;
 }
 
+// E-mail do estabelecimento cadastrado em Configurações — o RENAVE usa esse
+// endereço pra notificar a loja sobre eventos da operação. Campo existia no
+// formulário de Configurações mas nunca era lido nas chamadas reais.
+async function getEstablishmentEmail(): Promise<string | undefined> {
+  const settings = await prisma.companySettings.findFirst();
+  return settings?.renaveEmail ?? undefined;
+}
+
 function requireCrvData(vehicle: {
   crvType: string | null;
   codigoSegurancaCrv: string | null;
@@ -166,6 +174,7 @@ export const RenaveService = {
     const input = {
       cpfOperadorResponsavel: cpfOperador,
       dataCompra: vehicle.purchase.purchaseDate.toISOString().slice(0, 10),
+      emailEstabelecimento: await getEstablishmentEmail(),
       emailVendedor: seller.email ?? undefined,
       valorCompra: Number(vehicle.purchase.value),
       veiculo: {
@@ -230,6 +239,7 @@ export const RenaveService = {
     const input = {
       cpfOperadorResponsavel: cpfOperador,
       dataVenda: vehicle.sale.saleDate.toISOString().slice(0, 10),
+      emailEstabelecimento: await getEstablishmentEmail(),
       valorVenda: Number(vehicle.sale.value),
       veiculo: {
         codigoSegurancaCrv: crv.codigoSegurancaCrv,
