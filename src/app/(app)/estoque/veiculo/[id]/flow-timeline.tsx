@@ -96,7 +96,7 @@ export function FlowTimeline({ vehicleId, flowType, steps, counterpartName, sale
   }
 
   function handleStepClick(step: FlowStep) {
-    if (step.status !== "available") return;
+    if (step.status === "blocked") return;
 
     if (RENAVE_ACTIONS.has(step.action)) {
       runRenaveAction(step.action);
@@ -127,15 +127,17 @@ export function FlowTimeline({ vehicleId, flowType, steps, counterpartName, sale
               <p
                 className={cn(
                   "text-sm",
-                  step.status === "done" && "text-muted-foreground line-through",
                   step.status === "blocked" && "text-muted-foreground"
                 )}
               >
                 {step.label}
+                {step.status === "done" && (
+                  <span className="ml-2 text-xs text-emerald-600">(última execução: OK)</span>
+                )}
               </p>
               {step.detail && <p className="text-xs text-red-600">{step.detail}</p>}
             </div>
-            {step.status === "available" && (
+            {step.status !== "blocked" && (
               <Button
                 size="sm"
                 variant="outline"
