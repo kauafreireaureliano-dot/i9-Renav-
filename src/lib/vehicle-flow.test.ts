@@ -63,16 +63,67 @@ describe("getSaleFlowSteps", () => {
     expect(steps[1].status).toBe("blocked");
   });
 
-  it("libera emissão de NF de saída só depois do ATPV", () => {
+  it("libera emissão de NF de saída só depois do ATPV assinado", () => {
     const steps = getSaleFlowSteps({
       events: [
         { operation: "solicitarSaidaEstoque", status: "SUCESSO" },
-        { operation: "consultarAtpv", status: "SUCESSO" },
+        {
+          operation: "consultarAtpv",
+          status: "SUCESSO",
+          responseSanitized: { dataHoraRegistroAssinaturaVendedor: "2026-09-19T10:00:00Z" },
+        },
       ],
       invoices: [],
       vehicleStatus: "RESERVADO",
     });
+    expect(steps[1].status).toBe("done");
     expect(steps[2].status).toBe("available");
+  });
+
+  it("não conclui o ATPV quando a consulta funcionou mas o vendedor não assinou", () => {
+    const steps = getSaleFlowSteps({
+      events: [
+        { operation: "solicitarSaidaEstoque", status: "SUCESSO" },
+        { operation: "consultarAtpv", status: "SUCESSO", responseSanitized: {} },
+      ],
+      invoices: [],
+      vehicleStatus: "RESERVADO",
+    });
+    expect(steps[1].status).toBe("available");
+    expect(steps[1].detail).toMatch(/ainda não assinou/);
+    expect(steps[2].status).toBe("blocked");
+  });
+
+  it("só conclui a NF de saída depois que a chave é confirmada no RENAVE", () => {
+    const base = {
+      events: [
+        { operation: "solicitarSaidaEstoque", status: "SUCESSO" as const },
+        {
+          operation: "consultarAtpv",
+          status: "SUCESSO" as const,
+          responseSanitized: { dataHoraRegistroAssinaturaVendedor: "2026-09-19T10:00:00Z" },
+        },
+      ],
+      invoices: [{ type: "SAIDA" as const, status: "AUTORIZADA" }],
+      vehicleStatus: "RESERVADO" as const,
+    };
+
+    const semConfirmacao = getSaleFlowSteps(base);
+    expect(semConfirmacao[2].status).toBe("available");
+    expect(semConfirmacao[2].detail).toMatch(/não confirmada no RENAVE/);
+
+    const comConfirmacao = getSaleFlowSteps({
+      ...base,
+      events: [
+        ...base.events,
+        {
+          operation: "enviarNotaFiscal",
+          status: "SUCESSO" as const,
+          requestSanitized: { evento: "VENDA" },
+        },
+      ],
+    });
+    expect(comConfirmacao[2].status).toBe("done");
   });
 
   it("finalizar venda concluído quando o veículo já está VENDIDO", () => {

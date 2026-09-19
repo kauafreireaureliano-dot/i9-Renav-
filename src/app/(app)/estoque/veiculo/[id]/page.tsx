@@ -30,6 +30,7 @@ export default async function VeiculoPage({ params }: PageProps<"/estoque/veicul
     operation: e.operation,
     status: e.status as "SUCESSO" | "ERRO",
     responseSanitized: e.responseSanitized,
+    requestSanitized: e.requestSanitized,
   }));
   const flowInvoices = vehicle.invoices.map((i) => ({ type: i.type, status: i.status }));
 

@@ -33,7 +33,7 @@ const RENAVE_ACTIONS = new Set([
 ]);
 
 function StepIcon({ status }: { status: FlowStep["status"] }) {
-  if (status === "done") return <span className="text-emerald-600">✓</span>;
+  if (status === "done") return <span aria-label="Concluído">✅</span>;
   if (status === "warning") return <span className="text-red-600">⚠</span>;
   if (status === "available") return <span className="text-primary">○</span>;
   return <span className="text-muted-foreground">○</span>;
@@ -132,10 +132,19 @@ export function FlowTimeline({ vehicleId, flowType, steps, counterpartName, sale
               >
                 {step.label}
                 {step.status === "done" && (
-                  <span className="ml-2 text-xs text-emerald-600">(última execução: OK)</span>
+                  <span className="ml-2 text-xs font-medium text-emerald-600">Concluído</span>
                 )}
               </p>
-              {step.detail && <p className="text-xs text-red-600">{step.detail}</p>}
+              {step.detail && (
+                <p
+                  className={cn(
+                    "text-xs",
+                    step.status === "warning" ? "text-red-600" : "text-amber-600"
+                  )}
+                >
+                  {step.detail}
+                </p>
+              )}
             </div>
             {step.status !== "blocked" && (
               <Button
