@@ -45,6 +45,7 @@ export default async function ClientesPage({ searchParams }: PageProps<"/cliente
               <TableHead>Contato</TableHead>
               <TableHead>Cidade/UF</TableHead>
               <TableHead>Papéis</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -65,11 +66,31 @@ export default async function ClientesPage({ searchParams }: PageProps<"/cliente
                     </Badge>
                   ))}
                 </TableCell>
+                <TableCell className="text-right">
+                  <CustomerFormDialog
+                    customer={{
+                      id: c.id,
+                      name: c.name,
+                      document: c.document,
+                      documentType: c.documentType,
+                      phone: c.phone,
+                      whatsapp: c.whatsapp,
+                      email: c.email,
+                      address: c.address,
+                      addressNumber: c.addressNumber,
+                      neighborhood: c.neighborhood,
+                      zipCode: c.zipCode,
+                      city: c.city,
+                      state: c.state,
+                      roles: c.roles,
+                    }}
+                  />
+                </TableCell>
               </TableRow>
             ))}
             {customers.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                   Nenhum cliente cadastrado.
                 </TableCell>
               </TableRow>

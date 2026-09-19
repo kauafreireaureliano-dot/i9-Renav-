@@ -28,3 +28,7 @@ export type CreateCustomerData = Prisma.CustomerCreateInput;
 export function createCustomer(data: CreateCustomerData) {
   return prisma.customer.create({ data });
 }
+
+export function updateCustomer(id: string, data: Prisma.CustomerUpdateInput) {
+  return prisma.customer.update({ where: { id }, data });
+}
