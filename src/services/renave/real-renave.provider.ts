@@ -11,6 +11,7 @@ import type {
   CancelarEntradaInput,
   CancelarSaidaInput,
   AtpvAssinaturaResult,
+  TermoResult,
 } from "@/domain/renave";
 
 // Implementação real, baseada na especificação oficial obtida em
@@ -109,8 +110,13 @@ interface HttpResult {
   body: unknown;
 }
 
+const TIMEOUT_MS = 30_000;
+
+// Nunca rejeita: falha de rede/timeout vira um HttpResult com status 0, para
+// que a camada de cima registre o evento e mostre a mensagem ao operador. Uma
+// rejeição aqui subia como exceção não tratada e a tela ficava muda.
 function request(method: string, path: string, body?: unknown): Promise<HttpResult> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const payload = body !== undefined ? JSON.stringify(body) : undefined;
     const req = https.request(
       {
@@ -139,7 +145,12 @@ function request(method: string, path: string, body?: unknown): Promise<HttpResu
         });
       }
     );
-    req.on("error", reject);
+    req.setTimeout(TIMEOUT_MS, () => {
+      req.destroy(new Error(`Tempo esgotado após ${TIMEOUT_MS / 1000}s aguardando o RENAVE.`));
+    });
+    req.on("error", (err) => {
+      resolve({ status: 0, body: { mensagemParaUsuarioFinal: err.message } });
+    });
     if (payload) req.write(payload);
     req.end();
   });
@@ -152,11 +163,20 @@ interface ErrorBody {
 }
 
 function toFailure<T>(res: HttpResult, request: unknown): RenaveCallResult<T> {
-  const body = res.body as ErrorBody | null;
+  const body = res.body as (ErrorBody & { error?: string; message?: string }) | null;
   return {
     success: false,
-    errorCode: `HTTP_${res.status}`,
-    errorMessage: body?.mensagemParaUsuarioFinal ?? body?.detalhe ?? body?.titulo ?? "Erro na chamada ao RENAVE",
+    errorCode: res.status === 0 ? "FALHA_DE_REDE" : `HTTP_${res.status}`,
+    errorMessage:
+      body?.mensagemParaUsuarioFinal ??
+      body?.detalhe ??
+      body?.titulo ??
+      // 401/403 são barrados pela camada de segurança antes da aplicação, que
+      // responde no formato padrão do framework (error/message), não no
+      // formato de erro de negócio do RENAVE.
+      body?.error ??
+      body?.message ??
+      "Erro na chamada ao RENAVE",
     raw: { request, response: res.body },
   };
 }
@@ -338,11 +358,47 @@ export const realRenaveProvider: RenaveProvider = {
     const res = await request("GET", `/api/atpv-assinaturas/${placa}/${renavam}/ultimo`);
     if (res.status !== 200) return toFailure(res, { placa, renavam });
 
-    const data = res.body as { numeroAtpve?: string; estadoIntencaoVenda?: AtpvAssinaturaResult["estadoIntencaoVenda"] };
+    const data = res.body as {
+      numeroAtpve?: string;
+      estadoIntencaoVenda?: string;
+      dataHoraRegistroAssinaturaVendedor?: string;
+      tipoAssinaturaVendedor?: string;
+      pdfAtpveComAssinaturasAvancadasEmbarcadasBase64?: string;
+    };
     return {
       success: true,
-      data: { numeroAtpve: data.numeroAtpve, estadoIntencaoVenda: data.estadoIntencaoVenda },
+      data: {
+        numeroAtpve: data.numeroAtpve,
+        estadoIntencaoVenda: data.estadoIntencaoVenda,
+        dataHoraRegistroAssinaturaVendedor: data.dataHoraRegistroAssinaturaVendedor,
+        tipoAssinaturaVendedor: data.tipoAssinaturaVendedor,
+        pdfAtpveBase64: data.pdfAtpveComAssinaturasAvancadasEmbarcadasBase64,
+      },
       raw: { request: { placa, renavam }, response: res.body },
+    };
+  },
+
+  async consultarTermoEntrada(idEstoque: number): Promise<RenaveCallResult<TermoResult>> {
+    const res = await request("GET", `/api/estoques/${idEstoque}/termo-entrada-estoque`);
+    if (res.status !== 200) return toFailure(res, { idEstoque });
+
+    const data = res.body as { numeroTermoEntradaEstoque?: number; pdfBase64: string };
+    return {
+      success: true,
+      data: { numeroTermo: data.numeroTermoEntradaEstoque, pdfBase64: data.pdfBase64 },
+      raw: { request: { idEstoque }, response: { numeroTermoEntradaEstoque: data.numeroTermoEntradaEstoque } },
+    };
+  },
+
+  async consultarTermoSaida(idEstoque: number): Promise<RenaveCallResult<TermoResult>> {
+    const res = await request("GET", `/api/estoques/${idEstoque}/termo-saida-estoque`);
+    if (res.status !== 200) return toFailure(res, { idEstoque });
+
+    const data = res.body as { numeroTermoSaidaEstoque?: number; pdfBase64: string };
+    return {
+      success: true,
+      data: { numeroTermo: data.numeroTermoSaidaEstoque, pdfBase64: data.pdfBase64 },
+      raw: { request: { idEstoque }, response: { numeroTermoSaidaEstoque: data.numeroTermoSaidaEstoque } },
     };
   },
 };

@@ -3,6 +3,7 @@ import { sanitizeForLog } from "@/lib/sanitize";
 import { getMunicipioCode } from "@/lib/ibge";
 import { mockFiscalService } from "./mock-fiscal.service";
 import { realFiscalProvider } from "./real-fiscal.provider";
+import { RenaveService } from "@/services/renave/renave.service";
 import type { FiscalProvider, FiscalCallResult, FiscalInvoicePayload } from "@/domain/fiscal";
 import type { InvoiceType } from "@prisma/client";
 
@@ -193,6 +194,23 @@ async function emitir(
         }
       : { status: "REJEITADA", returnMessage: result.errorMessage },
   });
+
+  // O RENAVE exige que a chave da NF-e seja informada no registro de estoque
+  // (POST /api/notas-fiscais) — sem isso a entrada/saída fica incompleta do
+  // lado do Detran. Falha aqui não invalida a nota, que já foi autorizada:
+  // registramos o erro como evento RENAVE e o operador pode reenviar.
+  if (result.success && result.data?.accessKey) {
+    try {
+      await RenaveService.enviarNotaFiscal(
+        vehicleId,
+        userId,
+        result.data.accessKey,
+        type === "ENTRADA" ? "COMPRA" : "VENDA"
+      );
+    } catch (err) {
+      console.error("Falha ao informar a nota fiscal ao RENAVE:", err);
+    }
+  }
 
   return { invoice: updated, result };
 }

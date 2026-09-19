@@ -13,6 +13,8 @@ const actionSchema = z.object({
     "consultarEstoque",
     "cancelarEntrada",
     "cancelarSaida",
+    "consultarTermoEntrada",
+    "consultarTermoSaida",
   ]),
 });
 
@@ -46,6 +48,13 @@ export async function POST(
     if (err instanceof AuthError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
-    throw err;
+    // Erros de pré-condição (CPF do operador ausente, CRV incompleto, veículo
+    // sem compra) chegavam aqui e viravam um 500 em HTML — o front quebrava ao
+    // ler o JSON e a tela ficava muda. Agora sempre respondemos JSON legível.
+    console.error("Falha na operação RENAVE:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Erro inesperado na operação RENAVE" },
+      { status: 500 }
+    );
   }
 }

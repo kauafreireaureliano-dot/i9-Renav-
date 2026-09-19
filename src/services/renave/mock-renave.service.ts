@@ -10,7 +10,16 @@ import type {
   CancelarEntradaInput,
   CancelarSaidaInput,
   AtpvAssinaturaResult,
+  TermoResult,
 } from "@/domain/renave";
+
+// PDF mínimo válido (uma página em branco), para o fluxo de termos funcionar
+// ponta a ponta em desenvolvimento sem chamar o RENAVE.
+const MOCK_PDF_BASE64 =
+  "JVBERi0xLjQKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8" +
+  "PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdl" +
+  "L1BhcmVudCAyIDAgUi9NZWRpYUJveFswIDAgNTk1IDg0Ml0+PmVuZG9iagp0cmFpbGVyPDwvUm9vdCAx" +
+  "IDAgUj4+";
 
 // Implementação MOCK/SANDBOX do RenaveProvider — simula as respostas reais
 // da API (ver domain/renave.ts) sem se conectar ao RENAVE de verdade.
@@ -141,8 +150,23 @@ export const mockRenaveService: RenaveProvider = {
   ): Promise<RenaveCallResult<AtpvAssinaturaResult>> {
     await delay(300);
     return ok<AtpvAssinaturaResult>(
-      { numeroAtpve: `MOCK-ATPVE-${placa}`, estadoIntencaoVenda: "REGISTRADA" },
+      {
+        numeroAtpve: `MOCK-ATPVE-${placa}`,
+        estadoIntencaoVenda: "REGISTRADA",
+        dataHoraRegistroAssinaturaVendedor: new Date().toISOString(),
+        tipoAssinaturaVendedor: "PROPRIO_PUNHO_ATPV_PAPEL_MOEDA",
+      },
       { placa, renavam }
     );
+  },
+
+  async consultarTermoEntrada(idEstoque: number): Promise<RenaveCallResult<TermoResult>> {
+    await delay(300);
+    return ok<TermoResult>({ numeroTermo: idEstoque, pdfBase64: MOCK_PDF_BASE64 }, { idEstoque });
+  },
+
+  async consultarTermoSaida(idEstoque: number): Promise<RenaveCallResult<TermoResult>> {
+    await delay(300);
+    return ok<TermoResult>({ numeroTermo: idEstoque, pdfBase64: MOCK_PDF_BASE64 }, { idEstoque });
   },
 };

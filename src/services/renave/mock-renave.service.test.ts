@@ -109,6 +109,19 @@ describe("mockRenaveService", () => {
     expect(result.errorCode).toBe("CHAVE_NF_INVALIDA");
   });
 
+  it("consultarAtpv devolve a data de registro da assinatura do vendedor", async () => {
+    const result = await mockRenaveService.consultarAtpv("ABC1D23", "12345678901");
+    expect(result.success).toBe(true);
+    expect(result.data?.dataHoraRegistroAssinaturaVendedor).toBeDefined();
+  });
+
+  it("termos de entrada e saída devolvem PDF em base64", async () => {
+    const entrada = await mockRenaveService.consultarTermoEntrada(1001);
+    const saida = await mockRenaveService.consultarTermoSaida(1001);
+    expect(entrada.data?.pdfBase64).toMatch(/^JVBERi0/); // "%PDF-" em base64
+    expect(saida.data?.numeroTermo).toBe(1001);
+  });
+
   it("nunca lança exceção e sempre retorna o payload sanitizável em raw", async () => {
     const result = await mockRenaveService.consultarAptidao(aptidaoInput());
     expect(result.raw.request).toBeDefined();

@@ -125,7 +125,21 @@ export interface CancelarSaidaInput {
 
 export interface AtpvAssinaturaResult {
   numeroAtpve?: string;
-  estadoIntencaoVenda?: "REGISTRADA" | "VENDA_COMUNICADA" | "CANCELADA" | "CONSUMIDA";
+  estadoIntencaoVenda?: string;
+  // Sinal confiável de que o vendedor já assinou: a API preenche estes dois
+  // campos no momento do registro da assinatura. Antes usávamos um valor
+  // adivinhado de estadoIntencaoVenda ("CONSUMIDA"), que não existe na
+  // especificação — o Swagger só documenta o campo, sem enumerar os valores.
+  dataHoraRegistroAssinaturaVendedor?: string;
+  tipoAssinaturaVendedor?: string;
+  pdfAtpveBase64?: string;
+}
+
+// ---------- Termos de entrada/saída ----------
+
+export interface TermoResult {
+  numeroTermo?: number;
+  pdfBase64: string;
 }
 
 // Nota: a API real também tem POST /api/atpv-assinatura-vendedor para
@@ -147,4 +161,6 @@ export interface RenaveProvider {
   cancelarEntrada(input: CancelarEntradaInput): Promise<RenaveCallResult<EstoqueResult>>;
   cancelarSaida(input: CancelarSaidaInput): Promise<RenaveCallResult<EstoqueResult>>;
   consultarAtpv(placa: string, renavam: string): Promise<RenaveCallResult<AtpvAssinaturaResult>>;
+  consultarTermoEntrada(idEstoque: number): Promise<RenaveCallResult<TermoResult>>;
+  consultarTermoSaida(idEstoque: number): Promise<RenaveCallResult<TermoResult>>;
 }
