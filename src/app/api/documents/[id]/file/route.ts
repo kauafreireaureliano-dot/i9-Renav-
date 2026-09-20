@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireRole, AuthError } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { handleApiError } from "@/lib/api-error";
 import { getDocumentById } from "@/repositories/document.repository";
 import { readStoredFile } from "@/lib/storage";
 
@@ -26,9 +27,6 @@ export async function GET(
       },
     });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
+    return handleApiError(err);
   }
 }

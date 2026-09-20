@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole, AuthError } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { handleApiError } from "@/lib/api-error";
 import { hasPermission } from "@/lib/permissions";
 import { createVehicleSchema } from "@/lib/validation/vehicle";
 import { createVehicle, listVehicles } from "@/repositories/vehicle.repository";
@@ -16,10 +17,7 @@ export async function GET(req: NextRequest) {
     const vehicles = await listVehicles({ search });
     return NextResponse.json({ vehicles });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
+    return handleApiError(err);
   }
 }
 
@@ -56,9 +54,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ vehicle }, { status: 201 });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
+    return handleApiError(err);
   }
 }

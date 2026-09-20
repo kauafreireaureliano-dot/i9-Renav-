@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { requireRole, AuthError } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { handleApiError } from "@/lib/api-error";
 import { hasPermission } from "@/lib/permissions";
 import { RenaveService } from "@/services/renave/renave.service";
 
@@ -45,16 +46,6 @@ export async function POST(
 
     return NextResponse.json({ result });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    // Erros de pré-condição (CPF do operador ausente, CRV incompleto, veículo
-    // sem compra) chegavam aqui e viravam um 500 em HTML — o front quebrava ao
-    // ler o JSON e a tela ficava muda. Agora sempre respondemos JSON legível.
-    console.error("Falha na operação RENAVE:", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erro inesperado na operação RENAVE" },
-      { status: 500 }
-    );
+    return handleApiError(err);
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole, AuthError } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { handleApiError } from "@/lib/api-error";
 import { hasPermission } from "@/lib/permissions";
 import { saveFile } from "@/lib/storage";
 import { createDocument, listAllDocuments } from "@/repositories/document.repository";
@@ -34,10 +35,7 @@ export async function GET() {
     const documents = await listAllDocuments();
     return NextResponse.json({ documents });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
+    return handleApiError(err);
   }
 }
 
@@ -102,9 +100,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ document }, { status: 201 });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
+    return handleApiError(err);
   }
 }

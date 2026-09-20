@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { requireRole, AuthError } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { handleApiError } from "@/lib/api-error";
 import { hasPermission } from "@/lib/permissions";
 import { FiscalService } from "@/services/fiscal/fiscal.service";
 import { prisma } from "@/lib/prisma";
@@ -23,10 +24,7 @@ export async function GET() {
     });
     return NextResponse.json({ invoices });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
+    return handleApiError(err);
   }
 }
 
@@ -67,9 +65,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ invoice }, { status: 201 });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
+    return handleApiError(err);
   }
 }

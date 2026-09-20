@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole, AuthError } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { handleApiError } from "@/lib/api-error";
 import { createPurchaseSchema } from "@/lib/validation/purchase";
 import { createPurchase, listPurchases } from "@/repositories/purchase.repository";
 import { logAudit } from "@/lib/audit";
@@ -10,10 +11,7 @@ export async function GET() {
     const purchases = await listPurchases();
     return NextResponse.json({ purchases });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
+    return handleApiError(err);
   }
 }
 
@@ -42,9 +40,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ purchase }, { status: 201 });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
+    return handleApiError(err);
   }
 }

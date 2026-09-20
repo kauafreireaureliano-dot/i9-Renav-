@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireRole, AuthError } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { handleApiError } from "@/lib/api-error";
 import { hasPermission } from "@/lib/permissions";
 import { getDocumentById, deleteDocument } from "@/repositories/document.repository";
 import { deleteStoredFile } from "@/lib/storage";
@@ -34,9 +35,6 @@ export async function DELETE(
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
+    return handleApiError(err);
   }
 }

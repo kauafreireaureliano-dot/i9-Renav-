@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole, AuthError } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { handleApiError } from "@/lib/api-error";
 import { hasPermission } from "@/lib/permissions";
 import { createCustomerSchema } from "@/lib/validation/customer";
 import { createCustomer, listCustomers } from "@/repositories/customer.repository";
@@ -18,10 +19,7 @@ export async function GET(req: NextRequest) {
     const customers = await listCustomers({ search, role: role ?? undefined });
     return NextResponse.json({ customers });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
+    return handleApiError(err);
   }
 }
 
@@ -54,9 +52,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ customer }, { status: 201 });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
+    return handleApiError(err);
   }
 }

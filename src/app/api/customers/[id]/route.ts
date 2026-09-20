@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole, AuthError } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { handleApiError } from "@/lib/api-error";
 import { hasPermission } from "@/lib/permissions";
 import { updateCustomerSchema } from "@/lib/validation/customer";
 import { updateCustomer, getCustomerById } from "@/repositories/customer.repository";
@@ -47,9 +48,6 @@ export async function PATCH(
 
     return NextResponse.json({ customer });
   } catch (err) {
-    if (err instanceof AuthError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
-    throw err;
+    return handleApiError(err);
   }
 }
