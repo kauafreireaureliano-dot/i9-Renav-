@@ -16,6 +16,5 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Documentos", href: "/documentos", permission: "documents.view" },
   { label: "RENAVE", href: "/renave", permission: "renave.request" },
   { label: "Notas Fiscais", href: "/notas-fiscais", permission: "fiscal.emit" },
-  { label: "Relatórios", href: "/relatorios", permission: "reports.view" },
   { label: "Configurações", href: "/configuracoes", permission: "settings.view" },
 ];

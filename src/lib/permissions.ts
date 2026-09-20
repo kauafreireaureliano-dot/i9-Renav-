@@ -1,28 +1,28 @@
 import type { UserRole } from "@prisma/client";
 
+// Só ficam aqui permissões que têm uma função real implementada por trás.
+// Removidas em 2026-09-20 a pedido do Kauã: vehicle.delete, sale.cancel,
+// fiscal.cancel, reports.view, users.manage e audit.view não tinham
+// nenhuma tela/rota que as usasse — eram "botão fantasma". Se algum dia
+// vocês precisarem de alguma dessas funções, é só pedir que eu implemento
+// a função de verdade e devolvo a permissão aqui.
 export const PERMISSIONS = [
   "vehicle.view",
   "vehicle.create",
   "vehicle.edit",
-  "vehicle.delete",
   "customer.view",
   "customer.create",
   "purchase.create",
   "sale.create",
-  "sale.cancel",
   "renave.request",
   "renave.cancel",
   "fiscal.emit",
-  "fiscal.cancel",
   "documents.upload",
   "documents.view",
   "documents.delete",
-  "reports.view",
   "settings.view",
   "settings.edit",
   "settings.fiscal.edit",
-  "users.manage",
-  "audit.view",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -40,16 +40,13 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "customer.create",
     "purchase.create",
     "sale.create",
-    "sale.cancel",
     "renave.request",
     "renave.cancel",
     "fiscal.emit",
     "documents.upload",
     "documents.view",
     "documents.delete",
-    "reports.view",
     "settings.view",
-    "audit.view",
   ],
   VENDEDOR: [
     "vehicle.view",
@@ -62,7 +59,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   FINANCEIRO: [
     "vehicle.view",
     "customer.view",
-    "reports.view",
     "documents.view",
     "settings.view",
   ],
