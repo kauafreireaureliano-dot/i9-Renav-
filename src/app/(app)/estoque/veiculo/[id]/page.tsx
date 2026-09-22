@@ -180,6 +180,9 @@ export default async function VeiculoPage({ params }: PageProps<"/estoque/veicul
                     activeFlow === "compra" ? vehicle.purchase?.seller.name : vehicle.sale?.buyer.name
                   }
                   saleValue={activeFlow === "venda" && vehicle.sale ? Number(vehicle.sale.value) : undefined}
+                  purchaseValue={
+                    activeFlow === "compra" && vehicle.purchase ? Number(vehicle.purchase.value) : undefined
+                  }
                 />
               ) : (
                 <RenaveActions

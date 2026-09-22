@@ -23,6 +23,7 @@ interface Props {
   steps: FlowStep[];
   counterpartName?: string; // vendedor (compra) ou comprador (venda)
   saleValue?: number;
+  purchaseValue?: number;
 }
 
 const RENAVE_ACTIONS = new Set([
@@ -39,7 +40,14 @@ function StepIcon({ status }: { status: FlowStep["status"] }) {
   return <span className="text-muted-foreground">○</span>;
 }
 
-export function FlowTimeline({ vehicleId, flowType, steps, counterpartName, saleValue }: Props) {
+export function FlowTimeline({
+  vehicleId,
+  flowType,
+  steps,
+  counterpartName,
+  saleValue,
+  purchaseValue,
+}: Props) {
   const router = useRouter();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [invoiceDialog, setInvoiceDialog] = useState<{ action: string } | null>(null);
@@ -165,6 +173,7 @@ export function FlowTimeline({ vehicleId, flowType, steps, counterpartName, sale
           vehicleId={vehicleId}
           type={invoiceDialog.action === "emitirNotaEntrada" ? "ENTRADA" : "SAIDA"}
           defaultRecipient={counterpartName}
+          defaultValue={invoiceDialog.action === "emitirNotaEntrada" ? purchaseValue : saleValue}
           onClose={() => setInvoiceDialog(null)}
           onDone={() => {
             setInvoiceDialog(null);
@@ -246,12 +255,14 @@ function InvoiceStepDialog({
   vehicleId,
   type,
   defaultRecipient,
+  defaultValue,
   onClose,
   onDone,
 }: {
   vehicleId: string;
   type: "ENTRADA" | "SAIDA";
   defaultRecipient?: string;
+  defaultValue?: number;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -277,11 +288,16 @@ function InvoiceStepDialog({
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error ?? "Falha ao emitir a nota (ambiente de teste)");
+        toast.error(data.error ?? "Falha ao emitir a nota");
         return;
       }
 
-      toast.success("Nota emitida no ambiente de teste (MOCK).");
+      const environment = data.invoice?.environment;
+      toast.success(
+        environment === "PRODUCAO"
+          ? "Nota emitida — verifique o ambiente da Notaas (homologação ou produção real)."
+          : "Nota emitida no ambiente de simulação interna (MOCK)."
+      );
       onDone();
     } finally {
       setLoading(false);
@@ -315,11 +331,23 @@ function InvoiceStepDialog({
           </div>
           <div className="space-y-2">
             <Label htmlFor="value">Valor (R$)</Label>
-            <Input id="value" name="value" type="number" step="0.01" required />
+            <Input
+              id="value"
+              name="value"
+              type="number"
+              step="0.01"
+              required
+              defaultValue={defaultValue !== undefined ? defaultValue.toFixed(2) : undefined}
+            />
+            {defaultValue !== undefined && (
+              <p className="text-xs text-muted-foreground">
+                Preenchido com o valor de {type === "ENTRADA" ? "compra" : "venda"} cadastrado — confira antes de emitir.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button type="submit" disabled={loading}>
-              {loading ? "Emitindo..." : "Emitir (ambiente de teste)"}
+              {loading ? "Emitindo..." : "Emitir nota"}
             </Button>
           </DialogFooter>
         </form>
