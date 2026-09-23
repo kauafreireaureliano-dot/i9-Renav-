@@ -142,12 +142,23 @@ export interface TermoResult {
   pdfBase64: string;
 }
 
+// ---------- Assinatura do ATPV pelo vendedor ----------
+//
+// O carro nunca passa pro nome da loja enquanto está em estoque (é assim que
+// o RENAVE elimina a dupla transferência) — por isso quem assina o ATPV-e
+// autorizando a venda ao comprador final é o VENDEDOR ORIGINAL (pessoa
+// física), não a revenda. Exigir assinatura qualificada (certificado
+// digital) travaria a operação, já que praticamente nenhum vendedor de carro
+// usado tem e-CPF. Por isso usamos "próprio punho": o vendedor assina uma
+// folha/tela, a loja fotografa e envia — é o formato que a própria
+// especificação do RENAVE prevê para esse caso.
+export interface EnviarAssinaturaAtpvInput {
+  idEstoque: number;
+  fotoAssinadaBase64: string; // foto do ATPV-e assinado de próprio punho pelo vendedor
+}
+
 // Nota: a API real também tem POST /api/atpv-assinatura-vendedor para
-// registrar a assinatura do ATPV (própria mão ou qualificada P7S). Não está
-// no contrato abaixo porque exige captura de assinatura/certificado do
-// vendedor — infraestrutura que o sistema ainda não tem. Fica para uma
-// próxima etapa, sem afetar entrada/saída/aptidão/nota fiscal, que já
-// funcionam de ponta a ponta sem isso.
+// registrar a assinatura do ATPV (própria mão ou qualificada P7S).
 export interface RenaveProvider {
   consultarAptidao(input: ConsultarAptidaoInput): Promise<RenaveCallResult<AptidaoResult>>;
   solicitarEntradaEstoque(
@@ -161,6 +172,7 @@ export interface RenaveProvider {
   cancelarEntrada(input: CancelarEntradaInput): Promise<RenaveCallResult<EstoqueResult>>;
   cancelarSaida(input: CancelarSaidaInput): Promise<RenaveCallResult<EstoqueResult>>;
   consultarAtpv(placa: string, renavam: string): Promise<RenaveCallResult<AtpvAssinaturaResult>>;
+  enviarAssinaturaAtpv(input: EnviarAssinaturaAtpvInput): Promise<RenaveCallResult<{ enviado: boolean }>>;
   consultarTermoEntrada(idEstoque: number): Promise<RenaveCallResult<TermoResult>>;
   consultarTermoSaida(idEstoque: number): Promise<RenaveCallResult<TermoResult>>;
 }

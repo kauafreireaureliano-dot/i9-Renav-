@@ -12,6 +12,7 @@ import type {
   CancelarSaidaInput,
   AtpvAssinaturaResult,
   TermoResult,
+  EnviarAssinaturaAtpvInput,
 } from "@/domain/renave";
 
 // Implementação real, baseada na especificação oficial obtida em
@@ -376,6 +377,23 @@ export const realRenaveProvider: RenaveProvider = {
       },
       raw: { request: { placa, renavam }, response: res.body },
     };
+  },
+
+  async enviarAssinaturaAtpv(
+    input: EnviarAssinaturaAtpvInput
+  ): Promise<RenaveCallResult<{ enviado: boolean }>> {
+    const body = {
+      idEstoque: input.idEstoque,
+      envioAssinaturaProprioPunhoAtpve: {
+        fotoAtpveAssinadoDeProprioPunhoBase64: input.fotoAssinadaBase64,
+      },
+    };
+    // Não logamos a foto em si no evento (fica pesado e não é útil pra
+    // depuração) — só confirmamos que foi enviada.
+    const sanitizedRequest = { idEstoque: input.idEstoque, fotoAssinadaBase64: "[omitido]" };
+    const res = await request("POST", "/api/atpv-assinatura-vendedor", body);
+    if (res.status !== 200) return toFailure(res, sanitizedRequest);
+    return { success: true, data: { enviado: true }, raw: { request: sanitizedRequest, response: res.body } };
   },
 
   async consultarTermoEntrada(idEstoque: number): Promise<RenaveCallResult<TermoResult>> {

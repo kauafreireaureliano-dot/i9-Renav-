@@ -29,7 +29,6 @@ interface Props {
 const RENAVE_ACTIONS = new Set([
   "consultarAptidao",
   "solicitarEntradaEstoque",
-  "consultarAtpv",
   "solicitarSaidaEstoque",
 ]);
 
@@ -52,6 +51,7 @@ export function FlowTimeline({
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [invoiceDialog, setInvoiceDialog] = useState<{ action: string } | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ action: string } | null>(null);
+  const [atpvDialog, setAtpvDialog] = useState(false);
 
   async function runRenaveAction(action: string) {
     setPendingAction(action);
@@ -76,7 +76,7 @@ export function FlowTimeline({
       } else if (action === "consultarAptidao" && result.data?.apto === false) {
         toast.warning(`✕ Não apto: ${result.data.motivosParaNaoAptidao?.join("; ") ?? "sem detalhes"}`);
       } else {
-        toast.success("Operação concluída no ambiente de teste (MOCK).");
+        toast.success("Operação concluída.");
       }
       router.refresh();
     } finally {
@@ -108,6 +108,11 @@ export function FlowTimeline({
 
     if (RENAVE_ACTIONS.has(step.action)) {
       runRenaveAction(step.action);
+      return;
+    }
+
+    if (step.action === "consultarAtpv") {
+      setAtpvDialog(true);
       return;
     }
 
@@ -167,6 +172,17 @@ export function FlowTimeline({
           </div>
         </div>
       ))}
+
+      {atpvDialog && (
+        <AtpvStepDialog
+          vehicleId={vehicleId}
+          onClose={() => setAtpvDialog(false)}
+          onDone={() => {
+            setAtpvDialog(false);
+            router.refresh();
+          }}
+        />
+      )}
 
       {invoiceDialog && (
         <InvoiceStepDialog
@@ -244,8 +260,26 @@ export function FlowTimeline({
         </Dialog>
       )}
 
+      {flowType === "venda" && (
+        <div className="border-t pt-3 mt-1">
+          <p className="text-sm font-medium mb-1">Transferência e vistoria (Detran-PE)</p>
+          <p className="text-xs text-muted-foreground mb-2">
+            Fora do RENAVE — taxa estadual, paga direto no site do Detran-PE. Sem despachante.
+          </p>
+          <a
+            href="https://www.detran.pe.gov.br/transferencia-de-propriedade-mudanca-de-proprietario"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button variant="outline" size="sm">
+              Emitir guia no Detran-PE ↗
+            </Button>
+          </a>
+        </div>
+      )}
+
       <p className="text-xs text-muted-foreground pt-2">
-        Fluxo de {flowType === "compra" ? "compra (entrada)" : "venda (saída)"} · ambiente de teste
+        Fluxo de {flowType === "compra" ? "compra (entrada)" : "venda (saída)"}
       </p>
     </div>
   );
@@ -351,6 +385,126 @@ function InvoiceStepDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AtpvStepDialog({
+  vehicleId,
+  onClose,
+  onDone,
+}: {
+  vehicleId: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [checking, setChecking] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+
+  async function handleCheck() {
+    setChecking(true);
+    try {
+      const res = await fetch(`/api/renave/${vehicleId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "consultarAtpv" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "Falha ao consultar o ATPV");
+        return;
+      }
+      const result = data.result;
+      if (!result.success) {
+        toast.error(result.errorMessage ?? "Não foi possível consultar");
+      } else if (result.data?.dataHoraRegistroAssinaturaVendedor) {
+        toast.success("O vendedor já assinou o ATPV-e.");
+      } else {
+        toast.warning("Ainda não há assinatura registrada para este veículo.");
+      }
+      onDone();
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  function fileToBase64(f: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(f);
+    });
+  }
+
+  async function handleSend() {
+    if (!file) return;
+    setSending(true);
+    try {
+      const fotoAssinadaBase64 = await fileToBase64(file);
+      const res = await fetch(`/api/renave/${vehicleId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "enviarAssinaturaAtpv", fotoAssinadaBase64 }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "Falha ao enviar a assinatura");
+        return;
+      }
+      const result = data.result;
+      if (!result.success) {
+        toast.error(result.errorMessage ?? "RENAVE recusou a assinatura enviada");
+        return;
+      }
+      toast.success("Assinatura enviada com sucesso.");
+      onDone();
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Assinatura do ATPV-e</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Verifica se o vendedor já assinou (sem enviar nada).
+            </p>
+            <Button variant="outline" onClick={handleCheck} disabled={checking} className="w-full">
+              {checking ? "Consultando..." : "Consultar status atual"}
+            </Button>
+          </div>
+
+          <div className="border-t pt-4 space-y-2">
+            <Label htmlFor="atpv-foto">
+              Enviar foto do ATPV-e assinado de próprio punho pelo vendedor
+            </Label>
+            <Input
+              id="atpv-foto"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Peça pro vendedor assinar a folha impressa (ou na tela do celular), fotografe e envie aqui.
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Fechar
+          </Button>
+          <Button onClick={handleSend} disabled={!file || sending}>
+            {sending ? "Enviando..." : "Enviar assinatura"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

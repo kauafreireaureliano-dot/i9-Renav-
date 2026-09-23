@@ -11,6 +11,7 @@ import type {
   CancelarSaidaInput,
   AtpvAssinaturaResult,
   TermoResult,
+  EnviarAssinaturaAtpvInput,
 } from "@/domain/renave";
 
 // PDF mínimo válido (uma página em branco), para o fluxo de termos funcionar
@@ -158,6 +159,13 @@ export const mockRenaveService: RenaveProvider = {
       },
       { placa, renavam }
     );
+  },
+
+  async enviarAssinaturaAtpv(
+    input: EnviarAssinaturaAtpvInput
+  ): Promise<RenaveCallResult<{ enviado: boolean }>> {
+    await delay(300);
+    return ok({ enviado: true }, { idEstoque: input.idEstoque, fotoAssinadaBase64: "[omitido]" });
   },
 
   async consultarTermoEntrada(idEstoque: number): Promise<RenaveCallResult<TermoResult>> {

@@ -30,6 +30,17 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Só operação real de PRODUCAO custa taxa de verdade no Serpro — MOCK é
+// simulação interna e HOMOLOGACAO é a sandbox deles, nenhum dos dois gera
+// cobrança. Guarda o valor num "livro-caixa" pra saber o saldo acumulado sem
+// precisar entrar na Área do Cliente do Serpro toda hora.
+async function recordChargeIfProducao(vehicleId: string, operation: "solicitarEntradaEstoque" | "solicitarSaidaEstoque") {
+  if (getEnvironment() !== "PRODUCAO") return;
+  const settings = await prisma.companySettings.findFirst();
+  const amount = settings?.renaveFeeAmount ?? 5.48;
+  await prisma.renaveCharge.create({ data: { vehicleId, operation, amount } });
+}
+
 async function recordEvent<T>(
   vehicleId: string,
   userId: string,
@@ -198,6 +209,7 @@ export const RenaveService = {
         where: { vehicleId },
         data: { status: "ENTRADA_CONCLUIDA", idEstoqueRenave: result.data.idEstoque },
       });
+      await recordChargeIfProducao(vehicleId, "solicitarEntradaEstoque");
     } else {
       await setStatus(vehicleId, "ERRO", result.errorMessage);
     }
@@ -270,6 +282,7 @@ export const RenaveService = {
         where: { vehicleId },
         data: { status: "SAIDA_CONCLUIDA", idEstoqueRenave: result.data.idEstoque },
       });
+      await recordChargeIfProducao(vehicleId, "solicitarSaidaEstoque");
     } else {
       await setStatus(vehicleId, "ERRO", result.errorMessage);
     }
@@ -354,6 +367,41 @@ export const RenaveService = {
     if (result.success && result.data?.dataHoraRegistroAssinaturaVendedor) {
       await setStatus(vehicleId, "ATPV_ASSINADO");
     }
+    return result;
+  },
+
+  // Envia a foto do ATPV-e assinado de próprio punho pelo vendedor original
+  // (não a revenda — ver comentário em domain/renave.ts sobre por que).
+  async enviarAssinaturaAtpv(vehicleId: string, userId: string, fotoAssinadaBase64: string) {
+    const operation = await prisma.renaveOperation.findUniqueOrThrow({ where: { vehicleId } });
+    if (!operation.idEstoqueRenave) {
+      throw new Error("Este veículo ainda não tem um registro de estoque no RENAVE.");
+    }
+
+    const result = await getProvider().enviarAssinaturaAtpv({
+      idEstoque: operation.idEstoqueRenave,
+      fotoAssinadaBase64,
+    });
+    await recordEvent(vehicleId, userId, "enviarAssinaturaAtpv", result);
+
+    if (result.success) {
+      const mimeMatch = fotoAssinadaBase64.match(/^data:(image\/\w+);base64,/);
+      const mimeType = mimeMatch?.[1] ?? "image/jpeg";
+      const rawBase64 = fotoAssinadaBase64.replace(/^data:image\/\w+;base64,/, "");
+      const ext = mimeType.split("/")[1] ?? "jpg";
+      const fileName = `atpv-assinado-${operation.idEstoqueRenave}.${ext}`;
+      const fileUrl = await saveFile(Buffer.from(rawBase64, "base64"), fileName);
+      await createDocument({
+        vehicleId,
+        type: "ATPV",
+        fileUrl,
+        fileName,
+        mimeType,
+        notes: "Foto do ATPV-e assinado de próprio punho pelo vendedor",
+        uploadedById: userId,
+      });
+    }
+
     return result;
   },
 

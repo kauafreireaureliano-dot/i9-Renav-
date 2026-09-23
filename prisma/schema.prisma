@@ -190,6 +190,7 @@ model Vehicle {
   documents       Document[]
   invoices        Invoice[]
   renaveOperation RenaveOperation?
+  renaveCharges   RenaveCharge[]
   purchase        Purchase?
   sale            Sale?
   events          VehicleEvent[]
@@ -517,7 +518,32 @@ model CompanySettings {
   renaveEmail     String?
   renaveEnvironment  String @default("MOCK") // MOCK | PRODUCAO
   fiscalEnvironment  String @default("MOCK") // MOCK | PRODUCAO
+  renaveFeeAmount Decimal @default(5.48) @db.Decimal(6, 2) // taxa Serpro por entrada/saída real, cobrada via Área do Cliente
   updatedAt       DateTime @updatedAt
 
   @@map("company_settings")
+}
+
+// Cada operação real de entrada/saída no RENAVE gera uma taxa (~R$5,48,
+// cobrada pelo Serpro na Área do Cliente, fora do nosso sistema). Como o
+// Serpro fatura de forma consolidada mensal, mantemos aqui um "livro-caixa"
+// interno pra saber quanto está acumulado e quitar via Pix quando quiser —
+// sem precisar acessar o painel do Serpro pra saber o saldo.
+enum RenaveChargeStatus {
+  PENDENTE
+  PAGO
+}
+
+model RenaveCharge {
+  id          String             @id @default(uuid())
+  vehicle     Vehicle            @relation(fields: [vehicleId], references: [id])
+  vehicleId   String
+  operation   String // solicitarEntradaEstoque | solicitarSaidaEstoque
+  amount      Decimal            @db.Decimal(6, 2)
+  status      RenaveChargeStatus @default(PENDENTE)
+  paidAt      DateTime?
+  paymentId   String? // id do pagamento Pix no Mercado Pago, quando pago em lote
+  createdAt   DateTime           @default(now())
+
+  @@map("renave_charges")
 }

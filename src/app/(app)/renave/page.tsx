@@ -3,6 +3,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateTime } from "@/lib/format";
+import { RenaveFeeCard } from "./renave-fee-card";
 import Link from "next/link";
 
 export default async function RenavePage() {
@@ -30,6 +31,8 @@ export default async function RenavePage() {
         <StatCard label="Erros" value={String(data.erros)} tone={data.erros > 0 ? "warning" : "default"} />
         <StatCard label="Cancelamentos" value={String(data.cancelamentos)} />
       </div>
+
+      <RenaveFeeCard />
 
       <Card>
         <CardHeader>

@@ -99,6 +99,17 @@ describe("mockRenaveService", () => {
     expect(consulta.data?.idEstoque).toBe(idEstoque);
   });
 
+  it("enviarAssinaturaAtpv aceita a foto e confirma o envio", async () => {
+    const result = await mockRenaveService.enviarAssinaturaAtpv({
+      idEstoque: 1001,
+      fotoAssinadaBase64: "data:image/jpeg;base64,ZmFrZQ==",
+    });
+    expect(result.success).toBe(true);
+    expect(result.data?.enviado).toBe(true);
+    // a foto em si nunca deve aparecer no log sanitizado
+    expect(JSON.stringify(result.raw.request)).not.toContain("ZmFrZQ==");
+  });
+
   it("enviarNotaFiscal falha com chave de acesso inválida", async () => {
     const result = await mockRenaveService.enviarNotaFiscal({
       idEstoque: 1,
